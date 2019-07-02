@@ -342,8 +342,9 @@ for t in range(num_tasks):
         else:
             labels = [np.argmax(ts[1],axis=1) for ts in test_sets]
         probs = np.concatenate(probs)
-        labels = np.concatenate(labels)
-        save_samples(file_path,[probs,labels],['test_samples_t'+str(t), 'test_labels_t'+str(t)])
+        #print(type(labels[0][0]))
+        labels = np.concatenate(labels).astype(np.uint8)
+        save_samples(file_path,[probs,labels],['test_resps_t'+str(t), 'test_labels_t'+str(t)])
 
     if t < num_tasks-1:
         Model.config_next_task_parms(t,sess)

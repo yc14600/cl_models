@@ -34,6 +34,7 @@ from utils.test_util import *
 from hsvi import hsvi
 from hsvi.methods.svgd import SVGD
 from utils.data_util import save_samples
+from utils.train_util import shuffle_data
 from model.vcl_model import VCL
 from edward.models import Normal,MultivariateNormalTriL
 from tensorflow.examples.tutorials.mnist import input_data
@@ -341,9 +342,12 @@ for t in range(num_tasks):
             labels = [np.argmax(ts[1],axis=1)+t*out_dim for ts in test_sets]
         else:
             labels = [np.argmax(ts[1],axis=1) for ts in test_sets]
+        #samples = [ts[0] for ts in test_sets]
+        #samples = np.vstack(samples)
         probs = np.concatenate(probs)
         #print(type(labels[0][0]))
         labels = np.concatenate(labels).astype(np.uint8)
+        #samples,probs,labels = shuffle_data(samples,probs,labels)
         save_samples(file_path,[probs,labels],['test_resps_t'+str(t), 'test_labels_t'+str(t)])
 
     if t < num_tasks-1:

@@ -2,21 +2,14 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import edward as ed
-import scipy as sp
-import numpy as np
-import pandas as pd
-import tensorflow as tf
-import six
-import sys
-import os
-import time
 
-from edward.models import Normal,TransformedDistribution,Gamma
+import numpy as np
+import tensorflow as tf
+
+from edward.models import Normal
 
 from utils.train_util import *
 from utils.model_util import *
-from slvi.slvi.slvi import Hierarchy_SLVI
 from base_models.vae import VAE,Discriminant_VAE
 
 

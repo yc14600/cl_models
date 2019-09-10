@@ -16,7 +16,7 @@ sys.path.append(path+'/../')
 import tensorflow as tf
 # In[3]:
 from abc import ABC, abstractmethod
-from model.bcl_base_model import BCL_BASE_MODEL
+from .bcl_base_model import BCL_BASE_MODEL
 from utils.model_util import *
 from utils.train_util import *
 from utils.coreset_util import *

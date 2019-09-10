@@ -25,7 +25,7 @@ import tensorflow as tf
 import edward as ed
 # In[3]:
 
-from model.bcl_base_bnn import BCL_BNN
+from .bcl_base_bnn import BCL_BNN
 from utils.model_util import *
 from utils.train_util import *
 from utils.coreset_util import *

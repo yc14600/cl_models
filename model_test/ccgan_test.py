@@ -105,7 +105,7 @@ class CDRE_CFG:
         self.vae_loadpath = args.cdre_vae_loadpath
         self.vae_savepath = args.cdre_vae_savepath
         self.early_stop = True
-        self.filter_min = args.cdre_filter_min
+        self.filter = args.cdre_filter_range
 
 
 
@@ -158,7 +158,7 @@ parser.add_argument('--cdre_dim_reduction', default=None, type=str, help='reduce
 parser.add_argument('--cdre_z_dim',default=64,type=int,help='dimension of latent feature space')
 parser.add_argument('--cdre_vae_loadpath', default='', type=str, help='specify the file path to load a pre-trained VAE for feature extraction')
 parser.add_argument('--cdre_vae_savepath', default='', type=str, help='specify the file path to save a pre-trained VAE for feature extraction')
-parser.add_argument('--cdre_filter_min', default=0., type=float, help='minimum ratio after filtering by cdre')
+parser.add_argument('--cdre_filter_range', default=[-1.,1.], type=str2flist, help='ratio range after filtering by cdre')
 
 
 args = parser.parse_args()
@@ -239,9 +239,11 @@ if args.cdre:
         prev_nu_ph, prev_de_ph = None, None
 
     if cdre_cfg.dim_reduction == 'cvae':
-        args.cdre_dim_reduction = Continual_VAE(x_dim,cdre_cfg.z_dim,batch_size=200,e_net_shape=[512,512],d_net_shape=[256,256],sess=sess,epochs=100,reg='l2',noise_std=0.05)
+        args.cdre_dim_reduction = Continual_VAE(x_dim,cdre_cfg.z_dim,batch_size=200,e_net_shape=[512,512],d_net_shape=[256,256],\
+                                                sess=sess,epochs=100,reg='l2',noise_std=0.05,prior_std=1.)
     elif cdre_cfg.dim_reduction == 'vae':
-        args.cdre_dim_reduction = VAE(x_dim,cdre_cfg.z_dim,batch_size=200,e_net_shape=[512,512],d_net_shape=[256,256],sess=sess,epochs=100, reg='l2')
+        args.cdre_dim_reduction = VAE(x_dim,cdre_cfg.z_dim,batch_size=200,e_net_shape=[512,512],d_net_shape=[256,256],sess=sess,\
+                                        epochs=100, reg='l2')
                     
     if cdre_cfg.dim_reduction and cdre_cfg.vae_loadpath:
         saver = tf.train.Saver()
@@ -362,12 +364,12 @@ for t in range(args.T):
         fig = plot(samples[bids],shape=[8,8])
         fig.savefig(os.path.join(spath,'task'+str(t)+'bestsamples.pdf'))
         plt.close()
-        ### display selected worst samples ###
+        ### display selected samples ###
         ratios = sample_ratios['estimated_original_ratio'].values
-        selected = ratios[ratios>=cdre_cfg.filter_min]
-        wids = np.argsort(selected)[:64]
-        fig = plot(samples[ratios>=cdre_cfg.filter_min][wids],shape=[8,8])
-        fig.savefig(os.path.join(spath,'task'+str(t)+'selected_worstsamples.pdf'))
+        selected = (ratios>=cdre_cfg.filter[0]) & (ratios<=cdre_cfg.filter[1])
+        #wids = np.argsort(selected)[:64]
+        fig = plot(samples[selected][:64],shape=[8,8])
+        fig.savefig(os.path.join(spath,'task'+str(t)+'selected_samples.pdf'))
         plt.close()
     
 

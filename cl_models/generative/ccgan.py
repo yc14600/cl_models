@@ -243,9 +243,10 @@ class Continual_CGAN(object):
             estimated_ratio = self.cdre.estimator.log_ratio(self.model.sess,test_samples,test_samples,labels).sum(axis=1)
         print('check estimated ratio nan',np.sum(np.isnan(estimated_ratio)))
         print('estimated ratio stat',np.mean(estimated_ratio),np.std(estimated_ratio))
+        select = (estimated_ratio>=self.cdre_config.filter[0]) & (estimated_ratio<=self.cdre_config.filter[1])
         if not self.cdre.estimator.conv:
             samples = samples.reshape(*old_shape)
-        return samples[estimated_ratio>=self.cdre_config.filter_min], labels[estimated_ratio>=self.cdre_config.filter_min]
+        return samples[select], labels[select]
 
     
     def merge_train_data(self,new_X,new_cond,conds,c_dim=10,save_samples=True,sample_size=None,path='./'):

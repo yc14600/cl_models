@@ -88,7 +88,7 @@ def process_selected(t,samples,labels,ratios,frange,sample_size,test_sample_size
     selected_y_test = np.vstack(selected_y_test)
 
     return selected_x,selected_y,selected_x_test,selected_y_test
-
+'''
 def double_samples(t,samples,labels):
     x,y = [],[]
     size = int(samples.shape[0]/t)
@@ -98,7 +98,15 @@ def double_samples(t,samples,labels):
         x.append(samples[ids][dids])
         y.append(labels[ids][dids])
     return np.vstack(x),np.vstack(y)
-         
+'''
+def double_samples(samples,labels):
+    y = np.sum(labels,axis=0)
+    assert(np.sum(y>0)==1)
+    size = samples.shape[0]
+    ids = np.random.choice(range(size),size=2*size)
+    return samples[ids],labels[ids]
+
+
 class CDRE_CFG:
     def __init__(self,args):
         self.sample_size = args.cdre_sample_size
@@ -156,7 +164,7 @@ parser.add_argument('--memrplay', default=0., type=float, help='enable memory re
 parser.add_argument('--multihead', default=False, type=str2bool, help='use multi-dims output for discriminator')
 parser.add_argument('--cdre', default=False, type=str2bool, help='if use CDRE during continual training')
 parser.add_argument('--cdre_filter', default=True, type=str2bool, help='if False, only use CDRE without filtering during continual training')
-parser.add_argument('--cdre_early_filter', default=True, type=str2bool, help='if True, filtering samples for training cdre')
+#parser.add_argument('--cdre_early_filter', default=True, type=str2bool, help='if True, filtering samples for training cdre')
 parser.add_argument('--cdre_sample_size', default=20000, type=int, help='number of samples of each task')
 parser.add_argument('--cdre_test_sample_size', default=5000, type=int, help='number of test samples of each task')
 parser.add_argument('--cdre_batch_size', default=2000, type=int, help='batch size')
@@ -311,21 +319,32 @@ for t in range(args.T):
         old_c = np.arange(t)
         if t==0:
             X, Y, X_test, Y_test = x_train_task, y_train_task, x_test_task, y_test_task
+            if args.cdre:
+                if args.cdre_filter:
+                    prev_samples, prev_labels = double_samples(X, Y) 
+                else:
+                    prev_samples, prev_labels = X, Y
+                prev_test_samples, prev_test_labels = x_test_task, y_test_task
         else:
-            if not args.cdre:
-                X, Y = ccgan.merge_train_data(x_train_task,y_train_task,old_c,c_dim,save_samples=False,sample_size=sample_size)
+            if args.cdre: 
+                if args.cdre_filter:               
+                    X = np.vstack([selected_x,x_train_task])
+                    Y = np.vstack([selected_y,y_train_task])
+                    new_x, new_y = double_samples(x_train_task,y_train_task)
+                    prev_samples = np.vstack([prev_samples,new_x])
+                    prev_labels = np.vstack([prev_labels,new_y])
+                else:
+                    X, Y = ccgan.merge_train_data(x_train_task,y_train_task,old_c,c_dim,save_samples=False,sample_size=sample_size)
+                
+                    prev_samples = np.vstack([prev_samples,x_train_task])
+                    prev_labels = np.vstack([prev_labels,y_train_task])
 
-            elif not args.cdre_early_filter:
-                X, Y = ccgan.merge_train_data(x_train_task,y_train_task,old_c,c_dim,save_samples=False,sample_size=sample_size,\
-                                                filter=args.cdre_filter)
-                print('X,Y,x_train_task,y_train_task',X.shape,Y.shape,x_train_task.shape,y_train_task.shape)
-                X_test,Y_test = ccgan.merge_train_data(x_test_task,y_test_task,old_c,c_dim,filter=args.cdre_filter,\
-                                                    save_samples=False,sample_size=cdre_cfg.test_sample_size)
+                prev_test_samples = np.vstack([prev_test_samples,x_test_task])
+                prev_test_labels = np.vstack([prev_test_labels,y_test_task])
+
             else:
-                X = np.vstack([selected_x,x_train_task])
-                Y = np.vstack([selected_y,y_train_task])
-                X_test = np.vstack([selected_x_test, x_test_task])
-                Y_test = np.vstack([selected_y_test, y_test_task])
+                X, Y = ccgan.merge_train_data(x_train_task,y_train_task,old_c,c_dim,save_samples=False,sample_size=sample_size)
+   
        
     elif args.train_type == 'truedata':
         cls = np.arange(t+1)
@@ -350,7 +369,7 @@ for t in range(args.T):
     #    ccgan.optimize_disc(X,Y,args.batch_size,epoch=5)
     if not args.cdre:
         test_size = args.test_size
-    elif not args.cdre_early_filter:
+    elif not args.cdre_filter:
         test_size = cdre_cfg.sample_size
     else:
         test_size = cdre_cfg.sample_size * 2
@@ -371,15 +390,15 @@ for t in range(args.T):
                 ccgan.cdre_feature_extractor.update_inference()
         ### prepare data ###
         test_samples,test_labels = ccgan.gen_samples(np.arange(t+1),X_TRAIN[:cdre_cfg.test_sample_size].shape,c_dim=c_dim)
-        if args.cdre_early_filter:
-            X,Y = double_samples(t+1,X,Y)
-        if np.sum(labels!=Y)>0 or np.sum(test_labels!=Y_test)>0  :
+        #if args.cdre_early_filter:
+        #    X,Y = double_samples(t+1,X,Y)
+        if np.sum(labels!=prev_labels)>0 or np.sum(test_labels!=Y_test)>0  :
             assert('label not aligned!')
-        samples,labels,X,Y = shuffle_data(samples,labels,X,Y)
-        test_samples,test_labels,X_test,Y_test = shuffle_data(test_samples,test_labels,X_test,Y_test)
+        samples,labels,prev_samples,prev_labels = shuffle_data(samples,labels,prev_samples,prev_labels)
+        test_samples,test_labels,prev_test_samples,prev_test_labels = shuffle_data(test_samples,test_labels,prev_test_samples,prev_test_labels)
         ### fit cdre model and save sample ratios ###
-        estimated_ratios = ccgan.fit_cdre_model(t,samples,labels,test_samples,test_labels,prev_samples=X,prev_labels=Y,\
-                                prev_test_samples=X_test,prev_test_labels=Y_test)
+        estimated_ratios = ccgan.fit_cdre_model(t,samples,labels,test_samples,test_labels,prev_samples=prev_samples,prev_labels=prev_labels,\
+                                prev_test_samples=prev_test_samples,prev_test_labels=prev_test_labels)
 
         sample_ratios = pd.DataFrame()
         sample_ratios['estimated_original_ratio'] = estimated_ratios.sum(axis=1)
@@ -406,9 +425,9 @@ for t in range(args.T):
         fig = plot(samples[selected][:64],shape=[8,8])
         fig.savefig(os.path.join(spath,'task'+str(t)+'selected_samples.pdf'))
         plt.close()
-        if args.cdre_early_filter:
+        if args.cdre_filter:
             selected_x,selected_y,selected_x_test,selected_y_test = process_selected(t+1,samples,labels,ratios,args.cdre_filter_range,cdre_cfg.sample_size,cdre_cfg.test_sample_size)
-    
+        prev_samples, prev_labels, prev_test_samples, prev_test_labels = samples, labels, test_samples, test_labels
 
     if t < args.T-1: # and args.model_type == 'rfgan' 
         ccgan.update_model(t+1)

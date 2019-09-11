@@ -88,7 +88,7 @@ def process_selected(t,samples,labels,ratios,frange,sample_size,test_sample_size
     selected_y_test = np.vstack(selected_y_test)
 
     return selected_x,selected_y,selected_x_test,selected_y_test
-'''
+
 def double_samples(t,samples,labels):
     x,y = [],[]
     size = int(samples.shape[0]/t)
@@ -105,7 +105,7 @@ def double_samples(samples,labels):
     size = samples.shape[0]
     ids = np.random.choice(range(size),size=2*size)
     return samples[ids],labels[ids]
-
+'''
 
 class CDRE_CFG:
     def __init__(self,args):
@@ -320,24 +320,18 @@ for t in range(args.T):
         if t==0:
             X, Y, X_test, Y_test = x_train_task, y_train_task, x_test_task, y_test_task
             if args.cdre:
-                if args.cdre_filter:
-                    prev_samples, prev_labels = double_samples(X, Y) 
-                else:
-                    prev_samples, prev_labels = X, Y
+                #prev_samples, prev_labels = X, Y
                 prev_test_samples, prev_test_labels = x_test_task, y_test_task
         else:
             if args.cdre: 
                 if args.cdre_filter:               
                     X = np.vstack([selected_x,x_train_task])
                     Y = np.vstack([selected_y,y_train_task])
-                    new_x, new_y = double_samples(x_train_task,y_train_task)
-                    prev_samples = np.vstack([prev_samples,new_x])
-                    prev_labels = np.vstack([prev_labels,new_y])
+                    
                 else:
                     X, Y = ccgan.merge_train_data(x_train_task,y_train_task,old_c,c_dim,save_samples=False,sample_size=sample_size)
                 
-                    prev_samples = np.vstack([prev_samples,x_train_task])
-                    prev_labels = np.vstack([prev_labels,y_train_task])
+                #prev_samples, prev_labels = X, Y                    
 
                 prev_test_samples = np.vstack([prev_test_samples,x_test_task])
                 prev_test_labels = np.vstack([prev_test_labels,y_test_task])
@@ -390,8 +384,11 @@ for t in range(args.T):
                 ccgan.cdre_feature_extractor.update_inference()
         ### prepare data ###
         test_samples,test_labels = ccgan.gen_samples(np.arange(t+1),X_TRAIN[:cdre_cfg.test_sample_size].shape,c_dim=c_dim)
-        #if args.cdre_early_filter:
-        #    X,Y = double_samples(t+1,X,Y)
+        if args.cdre_filter:
+            prev_samples,prev_labels = double_samples(t+1,X,Y)
+        else:
+            prev_samples, prev_labels = X, Y
+
         if np.sum(labels!=prev_labels)>0 or np.sum(test_labels!=Y_test)>0  :
             assert('label not aligned!')
         samples,labels,prev_samples,prev_labels = shuffle_data(samples,labels,prev_samples,prev_labels)
@@ -427,7 +424,9 @@ for t in range(args.T):
         plt.close()
         if args.cdre_filter:
             selected_x,selected_y,selected_x_test,selected_y_test = process_selected(t+1,samples,labels,ratios,args.cdre_filter_range,cdre_cfg.sample_size,cdre_cfg.test_sample_size)
-        prev_samples, prev_labels, prev_test_samples, prev_test_labels = samples, labels, test_samples, test_labels
+            prev_samples, prev_labels, prev_test_samples, prev_test_labels = selected_x,selected_y,selected_x_test,selected_y_test
+        else:
+            prev_samples, prev_labels, prev_test_samples, prev_test_labels = samples, labels, test_samples, test_labels
 
     if t < args.T-1: # and args.model_type == 'rfgan' 
         ccgan.update_model(t+1)

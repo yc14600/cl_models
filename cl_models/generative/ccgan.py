@@ -201,21 +201,17 @@ class Continual_CGAN(object):
                 x,c = [],[]
                 while ret_size > 0:
                     x_i,c_i = self._gen_samples_by_batches(i,ret_size,c_dim,x_shape[1:])
-                    x_batch = x_i[:64]
-                    fig = plot(x_batch[:8*8],shape=[8,8])
-                    fig.savefig(os.path.join('../results/','x_batch.pdf'))
-                    plt.close()
                     x_i,c_i = self.filter_samples(t,x_i,c_i)
                     x.append(x_i)
                     c.append(c_i)
                     ret_size -= len(x_i)
                     print('size after filtering',ret_size)
-                    assert(len(x_i)>0)
+                    assert(ret_size<c_sample_size)
                 x = np.vstack(x)
                 c = np.vstack(c)
                 print('x {}, c {}'.format(x.shape,c.shape))
                 fig = plot(x[:64],shape=[8,8])
-                fig.savefig(os.path.join('./results/','task'+str(t)+'_cond'+str(i)+'_selected_samples.pdf'))
+                fig.savefig(os.path.join('../results/','task'+str(t)+'_cond'+str(i)+'_selected_samples.pdf'))
                 plt.close()
                 
             else:

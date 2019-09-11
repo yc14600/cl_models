@@ -214,6 +214,9 @@ class Continual_CGAN(object):
                 x = np.vstack(x)
                 c = np.vstack(c)
                 print('x {}, c {}'.format(x.shape,c.shape))
+                fig = plot(x[:64],shape=[8,8])
+                fig.savefig(os.path.join('./results/','task'+str(t)+'_cond'+str(i)+'_selected_samples.pdf'))
+                plt.close()
                 
             else:
                 x,c = self._gen_samples_by_batches(i,c_sample_size,c_dim,x_shape[1:])
@@ -249,7 +252,7 @@ class Continual_CGAN(object):
         return samples[select], labels[select]
 
     
-    def merge_train_data(self,new_X,new_cond,conds,c_dim=10,save_samples=True,sample_size=None,path='./'):
+    def merge_train_data(self,new_X,new_cond,conds,c_dim=10,save_samples=True,sample_size=None,path='./',filter=False):
         if sample_size:
             cids = np.random.choice(new_X.shape[0],size=sample_size)
             new_X = new_X[cids]
@@ -261,7 +264,7 @@ class Continual_CGAN(object):
             if not isinstance(conds,Iterable):
                 conds = range(conds) 
             #sample_size = new_X.shape[0] * len(conds)
-            px,py = self.gen_samples(conds,x_shape=new_X.shape,c_dim=c_dim,filter=True)
+            px,py = self.gen_samples(conds,x_shape=new_X.shape,c_dim=c_dim,filter=filter)
             if save_samples:
                 self.save_samples(path,px,py)
             print('px {}, new X {}'.format(px.shape,new_X.shape))

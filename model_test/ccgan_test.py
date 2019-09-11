@@ -143,6 +143,7 @@ parser.add_argument('--alpha', default=0.01, type=float, help='if enable anneali
 parser.add_argument('--memrplay', default=0., type=float, help='enable memory replay if larger than 0')
 parser.add_argument('--multihead', default=False, type=str2bool, help='use multi-dims output for discriminator')
 parser.add_argument('--cdre', default=False, type=str2bool, help='if use CDRE during continual training')
+parser.add_argument('--cdre_filter', default=True, type=str2bool, help='if False, only use CDRE without filtering during continual training')
 parser.add_argument('--cdre_sample_size', default=20000, type=int, help='number of samples of each task')
 parser.add_argument('--cdre_test_sample_size', default=5000, type=int, help='number of test samples of each task')
 parser.add_argument('--cdre_batch_size', default=2000, type=int, help='batch size')
@@ -298,7 +299,8 @@ for t in range(args.T):
         X, Y = ccgan.merge_train_data(x_train_task,y_train_task,old_c,c_dim,save_samples=False,sample_size=sample_size)
         print('X,Y,x_train_task,y_train_task',X.shape,Y.shape,x_train_task.shape,y_train_task.shape)
         if args.cdre:
-            X_test,Y_test = ccgan.merge_train_data(x_test_task,y_test_task,old_c,c_dim,save_samples=False,sample_size=cdre_cfg.test_sample_size)
+            X_test,Y_test = ccgan.merge_train_data(x_test_task,y_test_task,old_c,c_dim,filter=args.cdre_filter,\
+                                                save_samples=False,sample_size=cdre_cfg.test_sample_size)
        
     elif args.train_type == 'truedata':
         cls = np.arange(t+1)

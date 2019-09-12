@@ -184,7 +184,7 @@ class Continual_CGAN(object):
         return x,c
 
     
-    def gen_samples(self,conds,x_shape,c_dim=10,filter=False):
+    def gen_samples(self,conds,x_shape,c_dim=10,filtering=False):
         samples = []
         labels = []
         print('conds',conds)
@@ -196,7 +196,7 @@ class Continual_CGAN(object):
         for i in conds:
             print('cond',i)
             
-            if filter and self.cdre:
+            if filtering and self.cdre:
                 ret_size = c_sample_size
                 x,c = [],[]
                 while ret_size > 0:
@@ -242,13 +242,13 @@ class Continual_CGAN(object):
             estimated_ratio = self.cdre.estimator.log_ratio(self.model.sess,test_samples,test_samples,labels).sum(axis=1)
         print('check estimated ratio nan',np.sum(np.isnan(estimated_ratio)))
         print('estimated ratio stat',np.mean(estimated_ratio),np.std(estimated_ratio))
-        select = (estimated_ratio>=self.cdre_config.filter[0]) & (estimated_ratio<=self.cdre_config.filter[1])
+        select = (estimated_ratio>=self.cdre_config.filter[0]) #& (estimated_ratio<=self.cdre_config.filter[1])
         if not self.cdre.estimator.conv:
             samples = samples.reshape(*old_shape)
         return samples[select], labels[select]
 
     
-    def merge_train_data(self,new_X,new_cond,conds,c_dim=10,save_samples=True,sample_size=None,path='./'):
+    def merge_train_data(self,new_X,new_cond,conds,c_dim=10,save_samples=True,sample_size=None,path='./',filtering=False):
         if sample_size:
             cids = np.random.choice(new_X.shape[0],size=sample_size)
             new_X = new_X[cids]
@@ -260,7 +260,7 @@ class Continual_CGAN(object):
             if not isinstance(conds,Iterable):
                 conds = range(conds) 
             #sample_size = new_X.shape[0] * len(conds)
-            px,py = self.gen_samples(conds,x_shape=new_X.shape,c_dim=c_dim,filter=True)
+            px,py = self.gen_samples(conds,x_shape=new_X.shape,c_dim=c_dim,filtering=filtering)
             if save_samples:
                 self.save_samples(path,px,py)
             print('px {}, new X {}'.format(px.shape,new_X.shape))

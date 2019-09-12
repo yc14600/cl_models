@@ -262,7 +262,7 @@ if args.cdre:
 
     if cdre_cfg.dim_reduction == 'cvae':
         args.cdre_dim_reduction = Continual_VAE(x_dim,cdre_cfg.z_dim,batch_size=200,e_net_shape=[512,512],d_net_shape=[256,256],\
-                                                sess=sess,epochs=100,reg='l2',noise_std=0.05,prior_std=1.)
+                                                sess=sess,epochs=100,reg='l2',noise_std=0.1,prior_std=.1)
     elif cdre_cfg.dim_reduction == 'vae':
         args.cdre_dim_reduction = VAE(x_dim,cdre_cfg.z_dim,batch_size=200,e_net_shape=[512,512],d_net_shape=[256,256],sess=sess,\
                                         epochs=100, reg='l2')
@@ -325,7 +325,8 @@ for t in range(args.T):
 
             X, Y = ccgan.merge_train_data(x_train_task,y_train_task,old_c,c_dim,save_samples=False,sample_size=sample_size)
             if args.cdre:  
-                prev_test_samples, prev_test_labels = ccgan.merge_train_data(x_test_task,y_test_task,old_c,c_dim,save_samples=False,sample_size=test_sample_size)                     
+                prev_test_samples, prev_test_labels = ccgan.merge_train_data(x_test_task,y_test_task,old_c,c_dim,save_samples=False,\
+                                                                        sample_size=test_sample_size,filtering=args.cdre_filter)                     
        
     elif args.train_type == 'truedata':
         cls = np.arange(t+1)
@@ -348,10 +349,11 @@ for t in range(args.T):
 
     #if args.model_type == 'rfgan':
     #    ccgan.optimize_disc(X,Y,args.batch_size,epoch=5)
-    if not args.cdre:
-        test_size = args.test_size
-    elif args.cdre_filter:
+        
+    if args.cdre and args.cdre_filter:
         test_size = cdre_cfg.sample_size
+    else:
+        test_size = args.test_size
 
     #test_size = cdre_cfg.sample_size if args.cdre else args.test_size
     ### samples for training cdre model, no filtering here ###
@@ -368,15 +370,15 @@ for t in range(args.T):
             reinitialize_scope('ratio',sess)
             if isinstance(ccgan.cdre_feature_extractor, Continual_VAE):
                 ccgan.cdre_feature_extractor.update_inference()
+
         ### prepare data ###
         test_samples,test_labels = ccgan.gen_samples(np.arange(t+1),X_TRAIN[:cdre_cfg.test_sample_size].shape,c_dim=c_dim)
-        if args.cdre_filter:
-            prev_samples, prev_labels = X, Y
-
+        prev_samples, prev_labels = X, Y
         if np.sum(labels!=prev_labels)>0 or np.sum(test_labels!=Y_test)>0  :
             assert('label not aligned!')
         samples,labels,prev_samples,prev_labels = shuffle_data(samples,labels,prev_samples,prev_labels)
         test_samples,test_labels,prev_test_samples,prev_test_labels = shuffle_data(test_samples,test_labels,prev_test_samples,prev_test_labels)
+        
         ### fit cdre model and save sample ratios ###
         estimated_ratios = ccgan.fit_cdre_model(t,samples,labels,test_samples,test_labels,prev_samples=prev_samples,prev_labels=prev_labels,\
                                 prev_test_samples=prev_test_samples,prev_test_labels=prev_test_labels)
@@ -401,7 +403,7 @@ for t in range(args.T):
         plt.close()
         ### display selected samples ###
         ratios = sample_ratios['estimated_original_ratio'].values
-        selected = (ratios>=cdre_cfg.filter[0]) & (ratios<=cdre_cfg.filter[1])
+        selected = (ratios>=cdre_cfg.filter[0]) #& (ratios<=cdre_cfg.filter[1])
         #wids = np.argsort(selected)[:64]
         fig = plot(samples[selected][:64],shape=[8,8])
         fig.savefig(os.path.join(spath,'task'+str(t)+'selected_samples.pdf'))

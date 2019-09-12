@@ -325,7 +325,7 @@ for t in range(args.T):
 
             X, Y = ccgan.merge_train_data(x_train_task,y_train_task,old_c,c_dim,save_samples=False,sample_size=sample_size)
             if args.cdre:  
-                prev_test_samples, prev_test_labels = ccgan.merge_train_data(x_test_task,x_test_task,old_c,c_dim,save_samples=False,sample_size=test_sample_size)                     
+                prev_test_samples, prev_test_labels = ccgan.merge_train_data(x_test_task,y_test_task,old_c,c_dim,save_samples=False,sample_size=test_sample_size)                     
        
     elif args.train_type == 'truedata':
         cls = np.arange(t+1)

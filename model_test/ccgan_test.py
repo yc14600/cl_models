@@ -61,7 +61,7 @@ def set_tblog(ccgan):
     tf.summary.scalar('d_weight_exsample_grad', d_grad)
     merged = tf.summary.merge_all()
     return merged
-
+'''
 def process_selected(t,samples,labels,ratios,frange,sample_size,test_sample_size):
     selected_x,selected_y,selected_x_test,selected_y_test = [],[],[],[]
     for i in range(t):
@@ -98,7 +98,7 @@ def double_samples(t,samples,labels):
         x.append(samples[ids][dids])
         y.append(labels[ids][dids])
     return np.vstack(x),np.vstack(y)
-'''
+
 def double_samples(samples,labels):
     y = np.sum(labels,axis=0)
     assert(np.sum(y>0)==1)
@@ -320,25 +320,12 @@ for t in range(args.T):
         if t==0:
             X, Y, X_test, Y_test = x_train_task, y_train_task, x_test_task, y_test_task
             if args.cdre:
-                #prev_samples, prev_labels = X, Y
                 prev_test_samples, prev_test_labels = x_test_task, y_test_task
         else:
-            if args.cdre: 
-                if args.cdre_filter:               
-                    X = np.vstack([selected_x,x_train_task])
-                    Y = np.vstack([selected_y,y_train_task])
-                    
-                else:
-                    X, Y = ccgan.merge_train_data(x_train_task,y_train_task,old_c,c_dim,save_samples=False,sample_size=sample_size)
-                
-                #prev_samples, prev_labels = X, Y                    
 
-                prev_test_samples = np.vstack([prev_test_samples,x_test_task])
-                prev_test_labels = np.vstack([prev_test_labels,y_test_task])
-
-            else:
-                X, Y = ccgan.merge_train_data(x_train_task,y_train_task,old_c,c_dim,save_samples=False,sample_size=sample_size)
-   
+            X, Y = ccgan.merge_train_data(x_train_task,y_train_task,old_c,c_dim,save_samples=False,sample_size=sample_size)
+            if args.cdre:  
+                prev_test_samples, prev_test_labels = ccgan.merge_train_data(x_test_task,x_test_task,old_c,c_dim,save_samples=False,sample_size=sample_size)                     
        
     elif args.train_type == 'truedata':
         cls = np.arange(t+1)
@@ -363,10 +350,9 @@ for t in range(args.T):
     #    ccgan.optimize_disc(X,Y,args.batch_size,epoch=5)
     if not args.cdre:
         test_size = args.test_size
-    elif not args.cdre_filter:
+    elif args.cdre_filter:
         test_size = cdre_cfg.sample_size
-    else:
-        test_size = cdre_cfg.sample_size * 2
+
     #test_size = cdre_cfg.sample_size if args.cdre else args.test_size
     ### samples for training cdre model, no filtering here ###
     samples,labels = ccgan.gen_samples(np.arange(t+1),X_TRAIN[:test_size].shape,c_dim=c_dim)
@@ -385,8 +371,6 @@ for t in range(args.T):
         ### prepare data ###
         test_samples,test_labels = ccgan.gen_samples(np.arange(t+1),X_TRAIN[:cdre_cfg.test_sample_size].shape,c_dim=c_dim)
         if args.cdre_filter:
-            prev_samples,prev_labels = double_samples(t+1,X,Y)
-        else:
             prev_samples, prev_labels = X, Y
 
         if np.sum(labels!=prev_labels)>0 or np.sum(test_labels!=Y_test)>0  :
@@ -422,12 +406,14 @@ for t in range(args.T):
         fig = plot(samples[selected][:64],shape=[8,8])
         fig.savefig(os.path.join(spath,'task'+str(t)+'selected_samples.pdf'))
         plt.close()
+        '''
         if args.cdre_filter:
             selected_x,selected_y,selected_x_test,selected_y_test = process_selected(t+1,samples,labels,ratios,args.cdre_filter_range,cdre_cfg.sample_size,cdre_cfg.test_sample_size)
             prev_samples, prev_labels, prev_test_samples, prev_test_labels = selected_x,selected_y,selected_x_test,selected_y_test
         else:
             prev_samples, prev_labels, prev_test_samples, prev_test_labels = samples, labels, test_samples, test_labels
-
+        '''
+        
     if t < args.T-1: # and args.model_type == 'rfgan' 
         ccgan.update_model(t+1)
         if args.tblog:

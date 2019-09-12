@@ -260,7 +260,7 @@ class Continual_CGAN(object):
             if not isinstance(conds,Iterable):
                 conds = range(conds) 
             #sample_size = new_X.shape[0] * len(conds)
-            px,py = self.gen_samples(conds,x_shape=new_X.shape,c_dim=c_dim,filter=False)
+            px,py = self.gen_samples(conds,x_shape=new_X.shape,c_dim=c_dim,filter=True)
             if save_samples:
                 self.save_samples(path,px,py)
             print('px {}, new X {}'.format(px.shape,new_X.shape))

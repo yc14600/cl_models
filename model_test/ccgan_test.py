@@ -407,7 +407,7 @@ for t in range(args.T):
     fig.savefig(os.path.join(spath,'task'+str(t)+'bestsamples.pdf'))
     plt.close()
     ### display selected samples ###
-    selected = (ratios>=cdre_cfg.filter[0]) #& (ratios<=cdre_cfg.filter[1])
+    selected = (ratios>=args.cdre_filter_range[0]) & (ratios<=args.cdre_filter_range[1])
     #wids = np.argsort(selected)[:64]
     fig = plot(samples[selected][:64],shape=[8,8])
     fig.savefig(os.path.join(spath,'task'+str(t)+'selected_samples.pdf'))

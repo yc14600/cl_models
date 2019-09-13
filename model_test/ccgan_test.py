@@ -392,6 +392,7 @@ for t in range(args.T):
 
     else:
         ### use discriminator output to select samples ###
+        samples,labels = shuffle_data(samples,labels)
         ratios = ccgan.model.discriminator(samples,labels)
 
     ### display worst samples ###

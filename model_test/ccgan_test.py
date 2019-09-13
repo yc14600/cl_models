@@ -180,7 +180,7 @@ parser.add_argument('--cdre_dim_reduction', default=None, type=str, help='reduce
 parser.add_argument('--cdre_z_dim',default=64,type=int,help='dimension of latent feature space')
 parser.add_argument('--cdre_vae_loadpath', default='', type=str, help='specify the file path to load a pre-trained VAE for feature extraction')
 parser.add_argument('--cdre_vae_savepath', default='', type=str, help='specify the file path to save a pre-trained VAE for feature extraction')
-parser.add_argument('--cdre_filter_range', default=[-1.,1.], type=str2flist, help='ratio range after filtering by cdre')
+parser.add_argument('--cdre_filter_range', default=[-10.,100.], type=str2flist, help='ratio range after filtering by cdre')
 
 
 args = parser.parse_args()
@@ -388,33 +388,31 @@ for t in range(args.T):
         sample_ratios['sample_c'] = np.argmax(labels,axis=1)
         #print('check c',test_samples_c[:3],sample_ratios.sample_c[:3])
         sample_ratios.to_csv(spath+'sample_ratios_t'+str(t+1)+'.csv',index=False)
-
-        ### display worst samples ###
-        wids = np.argsort(sample_ratios['estimated_original_ratio'].values)[:64]
-        print('worst sample ratios',sample_ratios['estimated_original_ratio'].values[wids])
-        fig = plot(samples[wids],shape=[8,8])
-        fig.savefig(os.path.join(spath,'task'+str(t)+'worstsamples.pdf'))
-        plt.close()
-        ### display best samples ###
-        bids = np.argsort(sample_ratios['estimated_original_ratio'].values)[-64:]
-        print('best sample ratios',sample_ratios['estimated_original_ratio'].values[bids])
-        fig = plot(samples[bids],shape=[8,8])
-        fig.savefig(os.path.join(spath,'task'+str(t)+'bestsamples.pdf'))
-        plt.close()
-        ### display selected samples ###
         ratios = sample_ratios['estimated_original_ratio'].values
-        selected = (ratios>=cdre_cfg.filter[0]) #& (ratios<=cdre_cfg.filter[1])
-        #wids = np.argsort(selected)[:64]
-        fig = plot(samples[selected][:64],shape=[8,8])
-        fig.savefig(os.path.join(spath,'task'+str(t)+'selected_samples.pdf'))
-        plt.close()
-        '''
-        if args.cdre_filter:
-            selected_x,selected_y,selected_x_test,selected_y_test = process_selected(t+1,samples,labels,ratios,args.cdre_filter_range,cdre_cfg.sample_size,cdre_cfg.test_sample_size)
-            prev_samples, prev_labels, prev_test_samples, prev_test_labels = selected_x,selected_y,selected_x_test,selected_y_test
-        else:
-            prev_samples, prev_labels, prev_test_samples, prev_test_labels = samples, labels, test_samples, test_labels
-        '''
+
+    else:
+        ### use discriminator output to select samples ###
+        ratios = ccgan.model.discriminator(samples,labels)
+
+    ### display worst samples ###
+    wids = np.argsort(ratios)[:64]
+    print('worst sample ratios',sample_ratios['estimated_original_ratio'].values[wids])
+    fig = plot(samples[wids],shape=[8,8])
+    fig.savefig(os.path.join(spath,'task'+str(t)+'worstsamples.pdf'))
+    plt.close()
+    ### display best samples ###
+    bids = np.argsort(ratios)[-64:]
+    print('best sample ratios',sample_ratios['estimated_original_ratio'].values[bids])
+    fig = plot(samples[bids],shape=[8,8])
+    fig.savefig(os.path.join(spath,'task'+str(t)+'bestsamples.pdf'))
+    plt.close()
+    ### display selected samples ###
+    selected = (ratios>=cdre_cfg.filter[0]) #& (ratios<=cdre_cfg.filter[1])
+    #wids = np.argsort(selected)[:64]
+    fig = plot(samples[selected][:64],shape=[8,8])
+    fig.savefig(os.path.join(spath,'task'+str(t)+'selected_samples.pdf'))
+    plt.close()
+
         
     if t < args.T-1: # and args.model_type == 'rfgan' 
         ccgan.update_model(t+1)

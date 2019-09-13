@@ -396,13 +396,13 @@ for t in range(args.T):
 
     ### display worst samples ###
     wids = np.argsort(ratios)[:64]
-    print('worst sample ratios',sample_ratios['estimated_original_ratio'].values[wids])
+    print('worst sample ratios',ratios[wids])
     fig = plot(samples[wids],shape=[8,8])
     fig.savefig(os.path.join(spath,'task'+str(t)+'worstsamples.pdf'))
     plt.close()
     ### display best samples ###
     bids = np.argsort(ratios)[-64:]
-    print('best sample ratios',sample_ratios['estimated_original_ratio'].values[bids])
+    print('best sample ratios',ratios[bids])
     fig = plot(samples[bids],shape=[8,8])
     fig.savefig(os.path.join(spath,'task'+str(t)+'bestsamples.pdf'))
     plt.close()

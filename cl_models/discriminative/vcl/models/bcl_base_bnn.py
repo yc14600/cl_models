@@ -201,14 +201,16 @@ class BCL_BNN(BCL_BASE_MODEL):
         return
 
     def save_parm(self,t,file_path,sess,*args,**kargs):
+        w_stds, w_means, b_stds,b_means = [],[],[],[]
         for l in range(len(self.qW)):           
-            cov=sess.run(self.qW[l].scale)           
-            np.save(file_path+'_task'+str(t)+'_layer'+str(l)+'_weights_cov',cov)
-
-            mean=sess.run(self.qW[l].loc)
-            np.save(file_path+'_task'+str(t)+'_layer'+str(l)+'_weights_mean',mean)    
-            np.save(file_path+'_task'+str(t)+'_layer'+str(l)+'_bias_cov',sess.run(self.qB[l].scale))
-            np.save(file_path+'_task'+str(t)+'_layer'+str(l)+'_bias_mean',sess.run(self.qB[l].loc))
+            w_stds.append(sess.run(self.qW[l].scale))          
+            w_means.append(sess.run(self.qW[l].loc))
+            b_stds.append(sess.run(self.qB[l].scale))
+            b_means.append(sess.run(self.qB[l].loc))
+        
+        np.save(file_path+'task'+str(t)+'_parms_std',w_stds+b_stds)
+        np.save(file_path+'task'+str(t)+'_parms_mean',w_means+b_means)    
+    
         return
 
     def test_all_tasks(self,t,test_sets,sess,epoch=10,saver=None,file_path=None,*args,**kargs):

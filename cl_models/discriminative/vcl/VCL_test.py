@@ -35,7 +35,7 @@ from hsvi import hsvi
 from hsvi.methods.svgd import SVGD
 from utils.data_util import save_samples
 from utils.train_util import shuffle_data
-from model.vcl_model import VCL
+from models.vcl_model import VCL
 from edward.models import Normal,MultivariateNormalTriL
 from tensorflow.examples.tutorials.mnist import input_data
 from tensorflow.python.keras.datasets import cifar10,cifar100
@@ -45,7 +45,8 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('-sd','--seed', default=42, type=int, help='random seed')
 parser.add_argument('-ds','--dataset', default='mnist', type=str, help='specify datasets')
-parser.add_argument('-ttp','--task_type', default='split', type=str, help='task type')
+parser.add_argument('-rp','--result_path',default='./results/',type=str,help='the path for saving results')
+parser.add_argument('-ttp','--task_type', default='split', type=str, help='task type can be split, permuted, cross split, batch')
 parser.add_argument('-vtp','--vi_type', default='KLqp_analytic', type=str, help='type of variational inference')
 parser.add_argument('-e','--epoch', default=50, type=int, help='number of epochs')
 parser.add_argument('-csz','--coreset_size', default=0, type=int, help='size of each class in a coreset')
@@ -66,6 +67,8 @@ parser.add_argument('-lr','--learning_rate', default=0.001, type=float, help='le
 parser.add_argument('-af','--ac_fn', default='relu', type=str, help='activation function of hidden layers')
 parser.add_argument('-irt','--irt', default=False, type=str2bool, help='generate responses for IRT modelling')
 parser.add_argument('-tb','--tensorboard', default=False, type=str2bool, help='enable tensorboard')
+parser.add_argument('-mtp','--model_type', default='continual', type=str,help='model type can be continual,single')
+parser.add_argument('-fim','--save_FIM', default=False,type=str2bool,help='save Fisher Info Matrix of the model')
 
 
 args = parser.parse_args()
@@ -118,13 +121,12 @@ print(args.task_type)
 if 'split' in args.task_type:
     if dataset in ['fashion','mnist','notmnist']:
         num_tasks = 5
-    elif dataset in ['not-notmnist']:
+    elif dataset in ['not-notmnist','cifar']:
         num_tasks = 10
     elif dataset == 'quickdraw':
         num_tasks = 8
-    elif dataset in ['cifar']:
-        num_tasks = 10
-        conv = True
+elif 'batch' in args.task_type:
+    num_tasks = 1
 else:
     num_tasks = args.num_tasks
 
@@ -133,16 +135,19 @@ if not args.multihead:
 else:
     num_heads = num_tasks
 
+if 'cifar' in dataset:
+    conv = True
+
 print('heads',num_heads)
 # In[9]:
 
-result_path = './results/'
+result_path = args.result_path
 
 
 
 # load data for different task
 
-if 'permuted' in args.task_type:
+if  args.task_type in ['permuted', 'batch']:
     data = input_data.read_data_sets(DATA_DIR,one_hot=True) 
     shuffle_ids = np.arange(data.train.images.shape[0])
     X_TRAIN = data.train.images[shuffle_ids][:args.train_size]
@@ -153,7 +158,11 @@ if 'permuted' in args.task_type:
     cl_n = out_dim # number of classes in each task
     cl_cmb = None
     # generate data for first task
-    x_train_task,y_train_task,x_test_task,y_test_task,cl_k,cls = gen_next_task_data(args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST)
+    if 'permuted' in args.task_type:
+        x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = gen_next_task_data(args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST)
+    else:
+        x_train_task,y_train_task,x_test_task,y_test_task = X_TRAIN, Y_TRAIN, X_TEST, Y_TEST
+        clss = None
 
 elif 'cross_split' in args.task_type:
     if dataset == 'not-notmnist':
@@ -166,14 +175,14 @@ elif 'cross_split' in args.task_type:
         out_dim = 2
         cl_n = out_dim
         cl_cmb = None
-        x_train_task,y_train_task,x_test_task,y_test_task,cl_k,cls = gen_next_task_data(args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST) 
+        x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = gen_next_task_data(args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST) 
     
     elif dataset == 'quickdraw':
         X_TRAIN,Y_TRAIN,X_TEST,Y_TEST = load_mini_quick_draw(DATA_DIR)
         out_dim = len(X_TRAIN)
         cl_n = out_dim
         cl_cmb = None
-        x_train_task,y_train_task,x_test_task,y_test_task,cl_k,cls = gen_next_task_data(args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,out_dim=out_dim) 
+        x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = gen_next_task_data(args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,out_dim=out_dim) 
 
 
 elif 'split' in args.task_type:
@@ -200,7 +209,7 @@ elif 'split' in args.task_type:
         cl_cmb = np.arange(100)
         cl_k = 0
         cl_n = 10
-        cls = cl_cmb[cl_k:cl_k+cl_n]
+        clss = cl_cmb[cl_k:cl_k+cl_n]
     else:
         data = input_data.read_data_sets(DATA_DIR) 
         X_TRAIN = np.concatenate([data.train.images,data.validation.images],axis=0)
@@ -217,7 +226,7 @@ elif 'split' in args.task_type:
         cl_k = 0
         cl_n = 2
         
-        x_train_task,y_train_task,x_test_task,y_test_task,cl_k,cls = gen_next_task_data(args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,\
+        x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = gen_next_task_data(args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,\
                                                                     cl_n=cl_n,cl_k=cl_k,cl_cmb=cl_cmb,out_dim=out_dim,num_heads=num_heads)
 
 
@@ -232,7 +241,7 @@ if not os.path.exists(result_path):
     os.mkdir(result_path)
 head = 'multi' if args.multihead else 'single'
 file_name = dataset+'_'+args.vi_type+'_tsize'+str(TRAIN_SIZE)+'_cset'+str(args.coreset_size)+args.coreset_type+'_'+args.coreset_usage+'_nsample'+str(args.num_samples)+'_bsize'+str(batch_size)+'_init'+str(int(args.ginit))\
-            +'_e'+str(args.epoch)+'_lit'+str(args.local_iter)+'_'+args.task_type+'_lrpm'+str(args.local_rpm)+'_'+args.grad_type+'_'+head+'_sd'+str(seed)
+            +'_e'+str(args.epoch)+'_lit'+str(args.local_iter)+'_'+args.task_type+'_lrpm'+str(args.local_rpm)+'_'+args.grad_type+'_'+head+'_'+args.model_type+'_sd'+str(seed)
 
 file_path = result_path+file_name
 file_path = config_result_path(file_path)
@@ -322,7 +331,7 @@ for t in range(num_tasks):
     # get test data
     test_sets.append((x_test_task,y_test_task))
     if args.coreset_size > 0:
-        x_train_task,y_train_task = Model.gen_task_coreset(t,x_train_task,y_train_task,args.task_type,sess,cl_n,cls)
+        x_train_task,y_train_task = Model.gen_task_coreset(t,x_train_task,y_train_task,args.task_type,sess,cl_n,clss)
     
     if args.tensorboard:
         Model.train_task(sess,t,x_train_task,y_train_task,args.epoch,print_iter,args.local_iter,\
@@ -332,6 +341,10 @@ for t in range(num_tasks):
 
     if args.save_parm:
         Model.save_parm(t,file_path,sess)
+    
+    if args.save_FIM:
+        FIM = get_model_FIM(Model,sess=sess)
+        np.save(file_path+'model_FIM_task'+str(t)+'.npy',FIM)
 
     accs, probs = Model.test_all_tasks(t,test_sets,sess,args.epoch,saver=saver,file_path=file_path)
     acc_record.append(accs)
@@ -358,8 +371,14 @@ for t in range(num_tasks):
             X_TRAIN,Y_TRAIN,X_TEST,Y_TEST = load_task_data(args.task_type,DATA_DIR)
             cl_k = 0
         '''
-        x_train_task,y_train_task,x_test_task,y_test_task,cl_k,cls = Model.update_task_data_and_inference(sess,t,args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,out_dim,original_batch_size=batch_size,cl_n=cl_n,cl_k=cl_k,cl_cmb=cl_cmb)
-
+        if args.model_type == 'continual':
+            x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = Model.update_task_data_and_inference(sess,t,args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,out_dim,original_batch_size=batch_size,cl_n=cl_n,cl_k=cl_k,cl_cmb=cl_cmb)
+        elif args.model_type == 'single':
+            x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = Model.update_task_data(sess,t,args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,out_dim,original_batch_size=batch_size,cl_n=cl_n,cl_k=cl_k,cl_cmb=cl_cmb)
+            if Model.coreset_size>0 and Model.coreset_usage != 'final':
+                Model.x_core_sets,Model.y_core_sets,c_cfg = aggregate_coreset(Model.core_sets,Model.core_y,Model.coreset_type,Model.num_heads,t,Model.n_samples,sess)
+            tf.global_variables_initializer().run()
+            Model.inference.reinitialize(task_id=t+1,coresets={'task':c_cfg})
 
 with open(file_path+'accuracy_record.csv','w') as f:
     writer = csv.writer(f,delimiter=',')

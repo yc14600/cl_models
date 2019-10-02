@@ -95,7 +95,7 @@ class VCL(BCL_BNN):
         return kl,ll,err
 
 
-    def config_next_task_parms(self,t,sess):
+    def config_next_task_parms(self,t,sess,*args,**kargs):
         # update parameter configurations
     
         task_var_cfg = {}
@@ -137,8 +137,12 @@ class VCL(BCL_BNN):
 
 
 
-    def update_task_data_and_inference(self,sess,t,task_name,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,out_dim,original_batch_size=500,cl_n=2,cl_k=0,cl_cmb=None):    
-        
+    def update_task_data_and_inference(self,sess,t,task_name,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,out_dim,\
+                                    original_batch_size=500,cl_n=2,cl_k=0,cl_cmb=None,*args,**kargs):    
+
+        ## re-configure priors ##
+        self.config_next_task_parms(t,sess,*args,**kargs)
+
         # update data and inference for next task         
         x_train_task,y_train_task,x_test_task,y_test_task,cl_k,cls = super(VCL,self).update_task_data(sess,t,task_name,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,out_dim,original_batch_size,cl_n,cl_k,cl_cmb)
         

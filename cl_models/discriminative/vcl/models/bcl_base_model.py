@@ -44,7 +44,7 @@ class BCL_BASE_MODEL(ABC):
 
     def init_inference(self,learning_rate,train_size,decay=None,grad_type='adam',*args,**kargs):
         self.config_optimizer(starter_learning_rate=learning_rate,decay=decay,grad_type=grad_type)
-        self.config_inference(train_size)
+        self.config_inference(train_size,*args,**kargs)
 
         return
 

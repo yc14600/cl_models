@@ -87,6 +87,7 @@ class BCL_BNN(BCL_BASE_MODEL):
                     core_y.append(core_yk)
             else:
                 for k in range(K):
+                    ## to do: change to general function ##
                     h_k = forward_cifar_model(core_x_ph[k],conv_W,self.batch_size)
                     core_yk = forward_nets(qW[k],qB[k],h_k,ac_fn=self.ac_fn,bayes=True,num_samples=self.n_samples)
                     core_y.append(core_yk)

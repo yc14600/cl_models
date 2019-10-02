@@ -36,6 +36,7 @@ from hsvi.methods.svgd import SVGD
 from utils.data_util import save_samples
 from utils.train_util import shuffle_data
 from models.vcl_model import VCL
+from models.vcl_kd import VCL_KD
 from edward.models import Normal,MultivariateNormalTriL
 from tensorflow.examples.tutorials.mnist import input_data
 from tensorflow.python.keras.datasets import cifar10,cifar100
@@ -69,6 +70,7 @@ parser.add_argument('-irt','--irt', default=False, type=str2bool, help='generate
 parser.add_argument('-tb','--tensorboard', default=False, type=str2bool, help='enable tensorboard')
 parser.add_argument('-mtp','--model_type', default='continual', type=str,help='model type can be continual,single')
 parser.add_argument('-fim','--save_FIM', default=False,type=str2bool,help='save Fisher Info Matrix of the model')
+parser.add_argument('-vcltp','--vcl_type', default='vanilla', type=str,help='vcl type can be vanilla,kd')
 
 
 args = parser.parse_args()
@@ -270,9 +272,22 @@ y_ph = tf.placeholder(dtype=tf.int32,shape=[args.num_samples,None,out_dim])
 
 net_shape = [in_dim]+hidden+[out_dim]
 
-Model = VCL(net_shape,x_ph,y_ph,num_heads,batch_size,args.coreset_size,args.coreset_type,args.coreset_usage,\
-            args.vi_type,conv,dropout,initialization=initialization,ac_fn=ac_fn,n_samples=args.num_samples,local_rpm=args.local_rpm)
-Model.init_inference(learning_rate=args.learning_rate,train_size=TRAIN_SIZE,grad_type=args.grad_type)
+
+
+if args.vcl_type=='vanilla':
+    Model = VCL(net_shape,x_ph,y_ph,num_heads,batch_size,args.coreset_size,args.coreset_type,args.coreset_usage,\
+                args.vi_type,conv,dropout,initialization=initialization,ac_fn=ac_fn,n_samples=args.num_samples,local_rpm=args.local_rpm)
+    scale = 1.
+elif args.vcl_type=='kd':
+    args.model_type = 'continual' # can only be continual for vcl_kd
+    Model = VCL_KD(net_shape,x_ph,y_ph,num_heads,batch_size,args.coreset_size,conv,dropout,\
+                initialization=initialization,ac_fn=ac_fn,n_samples=args.num_samples,local_rpm=args.local_rpm)
+    scale = 1.
+else:
+    raise TypeError('Wrong type of VCL')
+
+
+Model.init_inference(learning_rate=args.learning_rate,train_size=TRAIN_SIZE,grad_type=args.grad_type,scale=scale)
 
 sess = ed.get_session() 
 
@@ -330,7 +345,7 @@ print('num tasks',num_tasks)
 for t in range(num_tasks):
     # get test data
     test_sets.append((x_test_task,y_test_task))
-    if args.coreset_size > 0:
+    if Model.coreset_size > 0:
         x_train_task,y_train_task = Model.gen_task_coreset(t,x_train_task,y_train_task,args.task_type,sess,cl_n,clss)
     
     if args.tensorboard:
@@ -364,7 +379,7 @@ for t in range(num_tasks):
         save_samples(file_path,[probs,labels],['test_resps_t'+str(t), 'test_labels_t'+str(t)])
 
     if t < num_tasks-1:
-        Model.config_next_task_parms(t,sess)
+
         '''
         if t==4 and dataset=='notmnist' and  args.task_type=='split':
             DATA_DIR = '../datasets/MNIST_data/'
@@ -372,7 +387,9 @@ for t in range(num_tasks):
             cl_k = 0
         '''
         if args.model_type == 'continual':
-            x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = Model.update_task_data_and_inference(sess,t,args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,out_dim,original_batch_size=batch_size,cl_n=cl_n,cl_k=cl_k,cl_cmb=cl_cmb)
+            x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = Model.update_task_data_and_inference(sess,t,args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,out_dim,\
+                                                                                                            original_batch_size=batch_size,cl_n=cl_n,cl_k=cl_k,cl_cmb=cl_cmb,\
+                                                                                                            x_train_task=x_train_task,rpath=file_path)
         elif args.model_type == 'single':
             x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = Model.update_task_data(sess,t,args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,out_dim,original_batch_size=batch_size,cl_n=cl_n,cl_k=cl_k,cl_cmb=cl_cmb)
             if Model.coreset_size>0 and Model.coreset_usage != 'final':

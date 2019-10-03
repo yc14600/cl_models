@@ -89,7 +89,7 @@ ac_fn = set_ac_fn(args.ac_fn)
 dataset = args.dataset
 
 if dataset == 'mnist':
-    DATA_DIR = '/home/yu/gits/data/mnist/'
+    DATA_DIR = '../../../../data/mnist/'
 elif dataset == 'fashion':
     DATA_DIR = '/home/yu/gits/data/fashion/'
 elif dataset == 'notmnist':

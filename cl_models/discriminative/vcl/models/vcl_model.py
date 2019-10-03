@@ -144,8 +144,8 @@ class VCL(BCL_BNN):
         self.config_next_task_parms(t,sess,*args,**kargs)
 
         # update data and inference for next task         
-        x_train_task,y_train_task,x_test_task,y_test_task,cl_k,cls = super(VCL,self).update_task_data(sess,t,task_name,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,out_dim,original_batch_size,cl_n,cl_k,cl_cmb)
-        
+        x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = super(VCL,self).update_task_data(sess,t,task_name,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,out_dim,original_batch_size,cl_n,cl_k,cl_cmb)
+
         self.inference.latent_vars['task'] = self.task_var_cfg
         if self.coreset_size>0 and self.coreset_usage != 'final':
             self.x_core_sets,self.y_core_sets,c_cfg = aggregate_coreset(self.core_sets,self.core_y,self.coreset_type,self.num_heads,t,self.n_samples,sess)
@@ -166,5 +166,5 @@ class VCL(BCL_BNN):
             else:
                 self.inference.reinitialize(task_id=t+1)
 
-        return x_train_task,y_train_task,x_test_task,y_test_task,cl_k,cls
+        return x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss
 

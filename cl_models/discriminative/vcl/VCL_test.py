@@ -243,7 +243,7 @@ if not os.path.exists(result_path):
     os.mkdir(result_path)
 head = 'multi' if args.multihead else 'single'
 file_name = dataset+'_'+args.vi_type+'_tsize'+str(TRAIN_SIZE)+'_cset'+str(args.coreset_size)+args.coreset_type+'_'+args.coreset_usage+'_nsample'+str(args.num_samples)+'_bsize'+str(batch_size)+'_init'+str(int(args.ginit))\
-            +'_e'+str(args.epoch)+'_lit'+str(args.local_iter)+'_'+args.task_type+'_lrpm'+str(args.local_rpm)+'_'+args.grad_type+'_'+head+'_'+args.model_type+'_sd'+str(seed)
+            +'_e'+str(args.epoch)+'_lit'+str(args.local_iter)+'_'+args.task_type+'_lrpm'+str(args.local_rpm)+'_'+args.grad_type+'_'+head+'_'+args.model_type+'_'+args.vcl_type+'_sd'+str(seed)
 
 file_path = result_path+file_name
 file_path = config_result_path(file_path)
@@ -388,8 +388,8 @@ for t in range(num_tasks):
         '''
         if args.model_type == 'continual':
             x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = Model.update_task_data_and_inference(sess,t,args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,out_dim,\
-                                                                                                            original_batch_size=batch_size,cl_n=cl_n,cl_k=cl_k,cl_cmb=cl_cmb,\
-                                                                                                            x_train_task=x_train_task,rpath=file_path)
+                                                                                                        original_batch_size=batch_size,cl_n=cl_n,cl_k=cl_k,cl_cmb=cl_cmb,clss=clss,\
+                                                                                                        x_train_task=x_train_task,y_train_task=y_train_task,rpath=file_path)
         elif args.model_type == 'single':
             x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = Model.update_task_data(sess,t,args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,out_dim,original_batch_size=batch_size,cl_n=cl_n,cl_k=cl_k,cl_cmb=cl_cmb)
             if Model.coreset_size>0 and Model.coreset_usage != 'final':

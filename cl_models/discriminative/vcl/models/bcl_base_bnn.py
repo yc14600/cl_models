@@ -110,9 +110,13 @@ class BCL_BNN(BCL_BASE_MODEL):
         
         elif 'random' in self.coreset_type or self.coreset_type == 'stein':
             # default initialization of stein is random samples
-            idx = np.random.choice(x_train_task.shape[0],self.coreset_size)
+            while True:
+                idx = np.random.choice(x_train_task.shape[0],self.coreset_size)
+                core_y_set = y_train_task[idx]
+                if np.sum(core_y_set.sum(axis=0)>1) == cl_n:
+                    break
             core_x_set = x_train_task[idx]
-            core_y_set = y_train_task[idx]
+            
         
         elif 'rdproj' in self.coreset_type:
             if 'split' in task_name:
@@ -120,7 +124,8 @@ class BCL_BNN(BCL_BASE_MODEL):
             else:
                 core_x_set,core_y_set = gen_rdproj_coreset(x_train_task,y_train_task,self.coreset_size,cl_n)
 
-
+        elif 'distill' in self.coreset_type:
+            return x_train_task,y_train_task
         else:
             raise TypeError('Non-supported coreset type!') 
 

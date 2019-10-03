@@ -25,11 +25,9 @@ class VCL_KD(VCL):
                 dropout=None,initialization=None,ac_fn=tf.nn.relu,n_smaples=1,local_rpm=False,*args,**kargs):
         
         vi_type='KLqp'
-        self.X_hat_size = coreset_size
         self.X_hat = None
         coreset_type='distill'
         coreset_usage='distill'
-        coreset_size = 0  ## no use of usual coresets
         super(VCL_KD,self).__init__(net_shape,x_ph,y_ph,num_heads,batch_size,coreset_size,coreset_type,\
                     coreset_usage,vi_type,conv,dropout,initialization,ac_fn,n_smaples,local_rpm)
 
@@ -38,17 +36,23 @@ class VCL_KD(VCL):
  
 
 
-    def data_distill(self, X, sess,t,lr=0.01,iters=100,rpath='./'):
+    def data_distill(self, X, Y, sess,t,lr=0.001,iters=100,rpath='./',clss=None,*args,**kargs):
         ## distill data for whole training set ##
-        if self.X_hat is None:
+        if t==0:
             ## first task, init X_hat optimizer ##
-            self.distill_opt = config_optimizer(0.001,'step',scope='distill')
-            self.init_val = tf.Variable(np.zeros([self.X_hat_size,*X.shape[1:]]),dtype=tf.float32)
+            #self.X_hat, self.Y_hat = [],[]
+            self.distill_opt = config_optimizer(lr,'step',scope='distill')
 
         with tf.variable_scope('distill',reuse=tf.AUTO_REUSE):
-            rids = np.random.choice(X.shape[0],size=self.X_hat_size,replace=False)
-            self.X_hat = tf.get_variable(name='X_hat_'+str(t),dtype=tf.float32,initializer=X[rids])
-            #self.X_hat = tf.sigmoid(self.X_hat_var)
+            print('clss',clss)
+            while True:
+                rids = np.random.choice(X.shape[0],size=self.coreset_size,replace=False)
+                Y_hat_t = Y[rids]
+                if np.sum(Y_hat_t.sum(axis=0)>1) == len(clss):
+                    break
+            X_hat_t = tf.get_variable(name='X_hat_'+str(t),dtype=tf.float32,initializer=X[rids])
+            
+            
 
         #else:
             ## add X_hat to training set ##
@@ -65,7 +69,7 @@ class VCL_KD(VCL):
         else:
             raise NotImplementedError('Not support conv=True yet.')
         H = [X] + [tf.squeeze(h) for h in H]
-        H_hat = [self.X_hat] + [tf.squeeze(h) for h in self.H[:-1]]
+        H_hat = [X_hat_t] + [tf.squeeze(h) for h in self.H[:-1]]
         KL = 0.
         A = []
         #print(self.qW,self.qB,self.H)
@@ -84,34 +88,44 @@ class VCL_KD(VCL):
             log_p_a = calc_log_marginal(a,a_hat.sample())
             KL += tf.reduce_mean(log_q_a) - tf.reduce_mean(log_p_a)
 
-        grads = tf.gradients(KL, self.X_hat)
+        grads = tf.gradients(KL, X_hat_t)
         
         #print('grads',grads)
-        distill_train = self.distill_opt[0].apply_gradients([(grads[0],self.X_hat)], global_step=self.distill_opt[1])
+        distill_train = self.distill_opt[0].apply_gradients([(grads[0],X_hat_t)], global_step=self.distill_opt[1])
         print('train data distill')  
         reinitialize_scope(['distill'],sess)
         sess.run(tf.variables_initializer(self.distill_opt[0].variables()))
         for _ in range(iters):
-            x_hat = sess.run(self.X_hat)
+            x_hat = sess.run(X_hat_t)
             __,kl = sess.run([distill_train,KL],feed_dict={self.x_ph:x_hat})
             if (_+1)%10==0:
                 print('iter {}: KL {}'.format(_+1,kl))
 
-        X_hat = sess.run(self.X_hat)
-        fig = plot(X_hat.reshape(-1,28,28),shape=(2,3))
+        samples = sess.run(X_hat_t)
+        #self.X_hat.append(samples)
+        self.core_sets[0].append(samples)
+        self.core_sets[1].append(Y_hat_t)
+
+        fig = plot(samples.reshape(-1,28,28),shape=(2,3))
         fig.savefig(os.path.join(rpath,'data_rep_task'+str(t)+'.png'))
 
         return A
 
     
-    def config_next_task_parms(self,t,sess,x_train_task,rpath='./',*args,**kargs):
+    def config_next_task_parms(self,t,sess,x_train_task,y_train_task,clss,rpath='./',*args,**kargs):
         ## only consider single head for now ##
-        A_dists = self.data_distill(x_train_task,sess,t,rpath=rpath)
-        A_dists = [Wrapped_Marginal(a_dt) for a_dt in A_dists]
+        _ = self.data_distill(x_train_task,y_train_task,sess,t,clss=clss,rpath=rpath)
+        #A_dists = [Wrapped_Marginal(a_dt) for a_dt in A_dists]
         
-        H_hat = [self.X_hat] + [tf.squeeze(h) for h in self.H[:-1]]
+        H_hat = [np.vstack(self.core_sets[0])] + [tf.squeeze(h) for h in self.H[:-1]]
         self.task_var_cfg = {}
-        for w,b,x_hat,a_dist in zip(self.qW[-1:],self.qB[-1:],H_hat[-1:],A_dists[-1:]):
+        for w,b,x_hat in zip(self.qW[1:-1],self.qB[1:-1],H_hat[1:-1]):
+            pre_w_mu = sess.run(self.parm_var[w][0])
+            pre_w_sigma = sess.run(tf.exp(self.parm_var[w][1]))
+            pre_b_mu = sess.run(self.parm_var[b][0])
+            pre_b_sigma = sess.run(tf.exp(self.parm_var[b][1]))
+            a_dist = Wrapped_Marginal(get_acts_dist(x_hat,pre_w_mu,pre_w_sigma,pre_b_mu,pre_b_sigma))
+
             w_mu = self.parm_var[w][0]
             w_sigma = tf.exp(self.parm_var[w][1])
             b_mu = self.parm_var[b][0]

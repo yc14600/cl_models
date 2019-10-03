@@ -46,6 +46,7 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('-sd','--seed', default=42, type=int, help='random seed')
 parser.add_argument('-ds','--dataset', default='mnist', type=str, help='specify datasets')
+parser.add_argument('-dp','--data_path',default='/home/yu/gits/data/',type=str,help='path to dataset')
 parser.add_argument('-rp','--result_path',default='./results/',type=str,help='the path for saving results')
 parser.add_argument('-ttp','--task_type', default='split', type=str, help='task type can be split, permuted, cross split, batch')
 parser.add_argument('-vtp','--vi_type', default='KLqp_analytic', type=str, help='type of variational inference')
@@ -88,18 +89,14 @@ ac_fn = set_ac_fn(args.ac_fn)
 
 dataset = args.dataset
 
-if dataset == 'mnist':
-    DATA_DIR = '../../../../data/mnist/'
-elif dataset == 'fashion':
-    DATA_DIR = '/home/yu/gits/data/fashion/'
-elif dataset == 'notmnist':
-    DATA_DIR = '/home/yu/gits/data/not-mnist/'
+if dataset in ['mnist','fashion','not-mnist']:
+    DATA_DIR = os.path.join(args.data_path,dataset)
 elif dataset == 'not-notmnist':
     args.task_type = 'cross_split'
-    DATA_DIR = ['/home/yu/gits/data/mnist/','/home/yu/gits/data/not-mnist/']
+    DATA_DIR = [os.path.join(args.data_path,d) for d in ['mnist','not-mnist']]
 elif dataset == 'quickdraw':
-    DATA_DIR = '/home/yu/gits/data/quickdraw/full/numpy_bitmap/'
-print(dataset)
+    DATA_DIR = os.path.join(args.data_path,'/quickdraw/full/numpy_bitmap/')
+print(dataset, DATA_DIR)
 
 
 hidden = args.hidden #[256,256]

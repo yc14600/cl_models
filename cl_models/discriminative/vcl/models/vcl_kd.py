@@ -41,7 +41,7 @@ class VCL_KD(VCL):
  
 
 
-    def data_distill(self, X, Y, sess,t,lr=0.0001,iters=500,print_iter=50,rpath='./',clss=None,*args,**kargs):
+    def data_distill(self, X, Y, sess,t,lr=0.001,iters=300,print_iter=50,rpath='./',clss=None,*args,**kargs):
         ## distill data for whole training set ##
         if t==0:
             ## first task, init X_hat optimizer ##

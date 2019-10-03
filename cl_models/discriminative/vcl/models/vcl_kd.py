@@ -41,14 +41,13 @@ class VCL_KD(VCL):
  
 
 
-    def data_distill(self, X, Y, sess,t,lr=0.001,iters=300,print_iter=50,rpath='./',clss=None,*args,**kargs):
+    def data_distill(self, X, Y, sess,t,lr=0.0002,iters=500,print_iter=50,rpath='./',clss=None,*args,**kargs):
         ## distill data for whole training set ##
         if t==0:
-            ## first task, init X_hat optimizer ##
-            #self.X_hat, self.Y_hat = [],[]
             self.distill_opt = config_optimizer(lr,'step',scope='distill')
 
         with tf.variable_scope('distill',reuse=tf.AUTO_REUSE):
+            ## to do: change to reuse with assign op ##
             x_hat_t,Y_hat_t = gen_random_coreset(X,Y,self.coreset_size,clss)
             X_hat_t = tf.get_variable(name='X_hat_'+str(t),dtype=tf.float32,initializer=x_hat_t)
             
@@ -63,26 +62,22 @@ class VCL_KD(VCL):
         
         ## prepare input list of each layer ##
         ## to do: add code for conv later ##
-        if not self.conv:
-            ## self.x_ph.shape[0] == None ##
-            H = sess.run(self.H[:-1],feed_dict={self.x_ph:X})
-        else:
+        if self.conv:
             raise NotImplementedError('Not support conv=True yet.')
-        H = [X] + [tf.squeeze(h) for h in H]
+
         H_hat = [X_hat_t] + [tf.squeeze(h) for h in self.H[:-1]]
         KL = 0.
-        A = []
-        #print(self.qW,self.qB,self.H)
-        #print(self.parm_var)
-        for w,b,x,x_hat in zip(self.qW,self.qB,H,H_hat):
+        x = X
+        for w,b,x_hat in zip(self.qW,self.qB,H_hat):
             w_mu = sess.run(self.parm_var[w][0])
             w_sigma = sess.run(tf.exp(self.parm_var[w][1]))
             b_mu = sess.run(self.parm_var[b][0])
             b_sigma = sess.run(tf.exp(self.parm_var[b][1]))
 
             a = get_acts_dist(x,w_mu,w_sigma,b_mu,b_sigma)
+            x = forward_dense_layer(x,w_mu,b_mu,self.ac_fn)
+
             a_hat = get_acts_dist(x_hat,w_mu,w_sigma,b_mu,b_sigma)
-            A.append(a_hat)
 
             log_q_a = calc_log_marginal(a_hat,a_hat.sample())
             log_p_a = calc_log_marginal(a,a_hat.sample())
@@ -106,8 +101,6 @@ class VCL_KD(VCL):
                 
         samples = sess.run(X_hat_t)
     
-        #samples = X[rids]
-        #self.X_hat.append(samples)
         self.core_sets[0].append(samples)
         self.core_sets[1].append(Y_hat_t)
 
@@ -120,7 +113,6 @@ class VCL_KD(VCL):
     def config_next_task_parms(self,t,sess,x_train_task,y_train_task,clss,rpath='./',*args,**kargs):
         ## only consider single head for now ##
         self.data_distill(x_train_task,y_train_task,sess,t,clss=clss,rpath=rpath)
-        #A_dists = [Wrapped_Marginal(a_dt) for a_dt in A_dists]
         if self.enable_kd_reg:
             H_hat = [np.vstack(self.core_sets[0])] + [tf.squeeze(h) for h in self.H[:-1]]
             self.task_var_cfg = {}

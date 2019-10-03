@@ -71,6 +71,8 @@ parser.add_argument('-tb','--tensorboard', default=False, type=str2bool, help='e
 parser.add_argument('-mtp','--model_type', default='continual', type=str,help='model type can be continual,single')
 parser.add_argument('-fim','--save_FIM', default=False,type=str2bool,help='save Fisher Info Matrix of the model')
 parser.add_argument('-vcltp','--vcl_type', default='vanilla', type=str,help='vcl type can be vanilla,kd')
+parser.add_argument('-hdn','--hidden',default=[100,100],type=str2ilist,help='hidden units of each layer of the network')
+parser.add_argument('-kdr','--kd_reg',default=False,type=str2bool,help='if enable kd regularizer for vcl kd')
 
 
 args = parser.parse_args()
@@ -100,7 +102,7 @@ elif dataset == 'quickdraw':
 print(dataset)
 
 
-hidden = [256,256]
+hidden = args.hidden #[256,256]
 scale = 1.#TRAIN_SIZE/batch_size#weights of likelihood
 shrink = 1. #shrink train_size, smaller gives larger weights of KL-term
 
@@ -280,8 +282,8 @@ if args.vcl_type=='vanilla':
     scale = 1.
 elif args.vcl_type=='kd':
     args.model_type = 'continual' # can only be continual for vcl_kd
-    Model = VCL_KD(net_shape,x_ph,y_ph,num_heads,batch_size,args.coreset_size,conv,dropout,\
-                initialization=initialization,ac_fn=ac_fn,n_samples=args.num_samples,local_rpm=args.local_rpm)
+    Model = VCL_KD(net_shape,x_ph,y_ph,num_heads,batch_size,args.coreset_size,conv=conv,dropout=dropout,vi_type=args.vi_type,\
+                initialization=initialization,ac_fn=ac_fn,n_samples=args.num_samples,local_rpm=args.local_rpm,enable_kd_reg=args.kd_reg)
     scale = 1.
 else:
     raise TypeError('Wrong type of VCL')

@@ -102,7 +102,7 @@ class BCL_BNN(BCL_BASE_MODEL):
         
         return        
 
-    def gen_task_coreset(self,t,x_train_task,y_train_task,task_name,sess,cl_n=0,cls=None,*args,**kargs):
+    def gen_task_coreset(self,t,x_train_task,y_train_task,task_name,sess,cl_n=0,clss=None,*args,**kargs):
         if 'kcenter' in self.coreset_type :
             idx = gen_kcenter_coreset(x_train_task,self.coreset_size)
             core_x_set = x_train_task[idx]
@@ -110,17 +110,20 @@ class BCL_BNN(BCL_BASE_MODEL):
         
         elif 'random' in self.coreset_type or self.coreset_type == 'stein':
             # default initialization of stein is random samples
+            '''
             while True:
                 idx = np.random.choice(x_train_task.shape[0],self.coreset_size)
                 core_y_set = y_train_task[idx]
                 if np.sum(core_y_set.sum(axis=0)>1) == cl_n:
                     break
             core_x_set = x_train_task[idx]
+            '''
+            core_x_set,core_y_set = gen_random_coreset(x_train_task,y_train_task,self.coreset_size,clss)
             
         
         elif 'rdproj' in self.coreset_type:
             if 'split' in task_name:
-                core_x_set,core_y_set = gen_rdproj_coreset(x_train_task,y_train_task,self.coreset_size,cl_n,cls)
+                core_x_set,core_y_set = gen_rdproj_coreset(x_train_task,y_train_task,self.coreset_size,cl_n,clss)
             else:
                 core_x_set,core_y_set = gen_rdproj_coreset(x_train_task,y_train_task,self.coreset_size,cl_n)
 
@@ -247,14 +250,14 @@ class BCL_BNN(BCL_BASE_MODEL):
         # update data and inference for next task 
         
         if 'permuted' in task_name:
-            x_train_task,y_train_task,x_test_task,y_test_task,cl_k,cls = gen_next_task_data(task_name,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,sd=t+1)
+            x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = gen_next_task_data(task_name,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,sd=t+1)
         
         elif 'cross_split' in task_name:
-            x_train_task,y_train_task,x_test_task,y_test_task,cl_k,cls = gen_next_task_data(task_name,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,sd=t+1,cl_k=cl_k,out_dim=out_dim)
+            x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = gen_next_task_data(task_name,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,sd=t+1,cl_k=cl_k,out_dim=out_dim)
         
 
         elif 'split' in task_name:
-            x_train_task,y_train_task,x_test_task,y_test_task,cl_k,cls = gen_next_task_data(task_name,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,cl_n=cl_n,out_dim=out_dim,num_heads=self.num_heads,cl_cmb=cl_cmb,cl_k=cl_k)
+            x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = gen_next_task_data(task_name,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,cl_n=cl_n,out_dim=out_dim,num_heads=self.num_heads,cl_cmb=cl_cmb,cl_k=cl_k)
         
             TRAIN_SIZE = x_train_task.shape[0]    
             #TEST_SIZE = x_test_task.shape[0]
@@ -267,4 +270,4 @@ class BCL_BNN(BCL_BASE_MODEL):
             print('train size',TRAIN_SIZE,'batch size',self.batch_size)
         
 
-        return x_train_task,y_train_task,x_test_task,y_test_task,cl_k,cls
+        return x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss

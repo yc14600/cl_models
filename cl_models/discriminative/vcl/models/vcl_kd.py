@@ -114,8 +114,11 @@ class VCL_KD(VCL):
         ## only consider single head for now ##
         self.data_distill(x_train_task,y_train_task,sess,t,clss=clss,rpath=rpath)
         if self.enable_kd_reg:
-            H_hat = [np.vstack(self.core_sets[0])] + [tf.squeeze(h) for h in self.H[:-1]]
+            X_hat = np.vstack(self.core_sets[0])
+            H = sess.run(self.H,feed_dict={self.x_ph:X_hat})
+            H_hat = [X_hat] + [tf.squeeze(h) for h in H[:-1]]
             self.task_var_cfg = {}
+            
             for w,b,x_hat in zip(self.qW[-1:],self.qB[-1:],H_hat[-1:]):
                 pre_w_mu = sess.run(self.parm_var[w][0])
                 pre_w_sigma = sess.run(tf.exp(self.parm_var[w][1]))

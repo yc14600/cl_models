@@ -24,18 +24,21 @@ class VCL_KD(VCL):
 
     def __init__(self,net_shape,x_ph,y_ph,num_heads=1,batch_size=500,coreset_size=0,vi_type='KLqp_analytic',conv=False,\
                 dropout=None,initialization=None,ac_fn=tf.nn.relu,n_smaples=1,local_rpm=False,\
-                enable_kd_reg=True,*args,**kargs):
+                enable_kd_reg=True,enable_vcl_reg=True,*args,**kargs):
         
         
         self.X_hat = None
         self.enable_kd_reg = enable_kd_reg
+        self.enable_vcl_reg = enable_vcl_reg
         coreset_type='distill'
         coreset_usage='distill'
+        '''
         if self.enable_kd_reg:
             if 'GNG' in vi_type:
                 vi_type = 'KLqp_GNG'
             else:
                 vi_type = 'KLqp'
+        '''
         super(VCL_KD,self).__init__(net_shape,x_ph,y_ph,num_heads,batch_size,coreset_size,coreset_type,\
                     coreset_usage,vi_type,conv,dropout,initialization,ac_fn,n_smaples,local_rpm)
 
@@ -44,7 +47,7 @@ class VCL_KD(VCL):
  
 
 
-    def data_distill(self, X, Y, sess,t,lr=0.0002,iters=500,print_iter=50,rpath='./',clss=None,*args,**kargs):
+    def data_distill(self, X, Y, sess,t,lr=0.0001,iters=1000,print_iter=100,rpath='./',clss=None,*args,**kargs):
         ## distill data for whole training set ##
         if t==0:
             self.distill_opt = config_optimizer(lr,'step',scope='distill')
@@ -135,6 +138,8 @@ class VCL_KD(VCL):
                         qa_dist = Wrapped_Marginal(get_acts_dist(x_hat,w_mu,w_sigma,b_mu,b_sigma))
                         self.task_var_cfg[a_dist] = qa_dist
                         x_hat = forward_dense_layer(x_hat,pre_w_mu,pre_b_mu,self.ac_fn)
+            if self.enable_vcl_reg:
+                super(VCL_KD,self).config_next_task_parms(t,sess,*args,**kargs)
         else:
             super(VCL_KD,self).config_next_task_parms(t,sess,*args,**kargs)
 

@@ -74,6 +74,7 @@ parser.add_argument('-fim','--save_FIM', default=False,type=str2bool,help='save 
 parser.add_argument('-vcltp','--vcl_type', default='vanilla', type=str,help='vcl type can be vanilla,kd')
 parser.add_argument('-hdn','--hidden',default=[100,100],type=str2ilist,help='hidden units of each layer of the network')
 parser.add_argument('-kdr','--kd_reg',default=False,type=str2bool,help='if enable kd regularizer for vcl kd')
+parser.add_argument('-kdvr','--kd_vcl_reg',default=True,type=str2bool,help='if enable vcl and kd regularizers together for vcl kd')
 
 
 args = parser.parse_args()
@@ -280,7 +281,8 @@ if args.vcl_type=='vanilla':
 elif args.vcl_type=='kd':
     args.model_type = 'continual' # can only be continual for vcl_kd
     Model = VCL_KD(net_shape,x_ph,y_ph,num_heads,batch_size,args.coreset_size,conv=conv,dropout=dropout,vi_type=args.vi_type,\
-                initialization=initialization,ac_fn=ac_fn,n_samples=args.num_samples,local_rpm=args.local_rpm,enable_kd_reg=args.kd_reg)
+                initialization=initialization,ac_fn=ac_fn,n_samples=args.num_samples,local_rpm=args.local_rpm,\
+                enable_kd_reg=args.kd_reg,enable_vcl_reg=args.kd_vcl_reg)
     scale = 1.
 else:
     raise TypeError('Wrong type of VCL')

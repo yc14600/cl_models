@@ -32,7 +32,10 @@ class VCL_KD(VCL):
         coreset_type='distill'
         coreset_usage='distill'
         if self.enable_kd_reg:
-            vi_type='KLqp'
+            if 'GNG' in vi_type:
+                vi_type = 'KLqp_GNG'
+            else:
+                vi_type = 'KLqp'
         super(VCL_KD,self).__init__(net_shape,x_ph,y_ph,num_heads,batch_size,coreset_size,coreset_type,\
                     coreset_usage,vi_type,conv,dropout,initialization,ac_fn,n_smaples,local_rpm)
 
@@ -50,21 +53,16 @@ class VCL_KD(VCL):
             ## to do: change to reuse with assign op ##
             x_hat_t,Y_hat_t = gen_random_coreset(X,Y,self.coreset_size,clss)
             X_hat_t = tf.get_variable(name='X_hat_'+str(t),dtype=tf.float32,initializer=x_hat_t)
-            
-            
-        
-        #else:
-            ## add X_hat to training set ##
-        #    X = np.vstack([X,sess.run(self.X_hat)])       
+       
         ## only consider single head for now ##
         if self.num_heads > 1:
             raise NotImplementedError('Not support multihead in distillation currently.')
         
-        ## prepare input list of each layer ##
         ## to do: add code for conv later ##
         if self.conv:
             raise NotImplementedError('Not support conv=True yet.')
-
+        
+        ## prepare input list of each layer ##
         H_hat = [X_hat_t] + [tf.squeeze(h) for h in self.H[:-1]]
         KL = 0.
         x = X
@@ -114,25 +112,29 @@ class VCL_KD(VCL):
         ## only consider single head for now ##
         self.data_distill(x_train_task,y_train_task,sess,t,clss=clss,rpath=rpath)
         if self.enable_kd_reg:
-            X_hat = np.vstack(self.core_sets[0])
-            H = sess.run(self.H,feed_dict={self.x_ph:X_hat})
-            H_hat = [X_hat] + [tf.squeeze(h) for h in H[:-1]]
             self.task_var_cfg = {}
-            
-            for w,b,x_hat in zip(self.qW[-1:],self.qB[-1:],H_hat[-1:]):
-                pre_w_mu = sess.run(self.parm_var[w][0])
-                pre_w_sigma = sess.run(tf.exp(self.parm_var[w][1]))
-                pre_b_mu = sess.run(self.parm_var[b][0])
-                pre_b_sigma = sess.run(tf.exp(self.parm_var[b][1]))
-                a_dist = Wrapped_Marginal(get_acts_dist(x_hat,pre_w_mu,pre_w_sigma,pre_b_mu,pre_b_sigma))
+            for core_x,core_y in zip(self.core_sets[0],self.core_sets[1]):
+                y_lables = np.sum(core_y,axis=0)
+                for c,y in enumerate(y_lables):
+                    if y == 0:
+                        continue                    
+                    x_hat = core_x[core_y[:,c]==1]                      
+                    for w,b in zip(self.qW,self.qB):
+                        #print('x_hat {},w {}, b {}'.format(x_hat.shape,w.shape,b.shape))
+                        pre_w_mu = sess.run(self.parm_var[w][0])
+                        pre_w_sigma = sess.run(tf.exp(self.parm_var[w][1]))
+                        pre_b_mu = sess.run(self.parm_var[b][0])
+                        pre_b_sigma = sess.run(tf.exp(self.parm_var[b][1]))
+                        a_dist = Wrapped_Marginal(get_acts_dist(x_hat,pre_w_mu,pre_w_sigma,pre_b_mu,pre_b_sigma))
+                                        
+                        w_mu = self.parm_var[w][0]
+                        w_sigma = tf.exp(self.parm_var[w][1])
+                        b_mu = self.parm_var[b][0]
+                        b_sigma = tf.exp(self.parm_var[b][1])
 
-                w_mu = self.parm_var[w][0]
-                w_sigma = tf.exp(self.parm_var[w][1])
-                b_mu = self.parm_var[b][0]
-                b_sigma = tf.exp(self.parm_var[b][1])
-
-                qa_dist = Wrapped_Marginal(get_acts_dist(x_hat,w_mu,w_sigma,b_mu,b_sigma))
-                self.task_var_cfg[a_dist] = qa_dist
+                        qa_dist = Wrapped_Marginal(get_acts_dist(x_hat,w_mu,w_sigma,b_mu,b_sigma))
+                        self.task_var_cfg[a_dist] = qa_dist
+                        x_hat = forward_dense_layer(x_hat,pre_w_mu,pre_b_mu,self.ac_fn)
         else:
             super(VCL_KD,self).config_next_task_parms(t,sess,*args,**kargs)
 

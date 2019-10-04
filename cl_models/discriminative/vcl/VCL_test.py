@@ -336,7 +336,7 @@ if args.tensorboard:
 
 # Start training tasks
 test_sets = []
-acc_record, probs_record = [], []
+avg_accs ,acc_record, probs_record = [], [], []
 pre_parms = {}
 saver = tf.train.Saver()
 tf.global_variables_initializer().run()
@@ -362,6 +362,7 @@ for t in range(num_tasks):
 
     accs, probs = Model.test_all_tasks(t,test_sets,sess,args.epoch,saver=saver,file_path=file_path)
     acc_record.append(accs)
+    avg_accs.append(np.mean(accs))
     if args.irt:
         #print(probs[0].shape,test_sets[0][1].shape)
         probs = [prb[np.arange(len(prb)),np.argmax(ts[1],axis=1)] for prb,ts in zip(probs,test_sets)]
@@ -369,12 +370,10 @@ for t in range(num_tasks):
             labels = [np.argmax(ts[1],axis=1)+t*out_dim for ts in test_sets]
         else:
             labels = [np.argmax(ts[1],axis=1) for ts in test_sets]
-        #samples = [ts[0] for ts in test_sets]
-        #samples = np.vstack(samples)
+
         probs = np.concatenate(probs)
         #print(type(labels[0][0]))
         labels = np.concatenate(labels).astype(np.uint8)
-        #samples,probs,labels = shuffle_data(samples,probs,labels)
         save_samples(file_path,[probs,labels],['test_resps_t'+str(t), 'test_labels_t'+str(t)])
 
     if t < num_tasks-1:
@@ -400,6 +399,10 @@ with open(file_path+'accuracy_record.csv','w') as f:
     writer = csv.writer(f,delimiter=',')
     for t in range(len(acc_record)):
         writer.writerow(acc_record[t])
+
+with open(file_path+'avg_accuracy.csv','w') as f:
+    writer = csv.writer(f,delimiter=',')
+    writer.writerow(avg_accs)
 
 if not args.save_parm and args.coreset_usage=='final':
     os.system('rm '+file_path+"ssmodel.ckpt*")

@@ -22,7 +22,8 @@ from tensorflow.contrib.distributions import Normal
 
 class VCL_KD(VCL):
 
-    def __init__(self,net_shape,x_ph,y_ph,num_heads=1,batch_size=500,coreset_size=0,vi_type='KLqp_analytic',conv=False,\
+    def __init__(self,net_shape,x_ph,y_ph,num_heads=1,batch_size=500,coreset_size=0,coreset_type='random',\
+                coreset_usage='regret',vi_type='KLqp_analytic',conv=False,\
                 dropout=None,initialization=None,ac_fn=tf.nn.relu,n_smaples=1,local_rpm=False,\
                 enable_kd_reg=True,enable_vcl_reg=True,*args,**kargs):
         
@@ -30,9 +31,10 @@ class VCL_KD(VCL):
         self.X_hat = None
         self.enable_kd_reg = enable_kd_reg
         self.enable_vcl_reg = enable_vcl_reg
+        '''
         coreset_type='distill'
         coreset_usage='distill'
-        '''
+        
         if self.enable_kd_reg:
             if 'GNG' in vi_type:
                 vi_type = 'KLqp_GNG'
@@ -113,31 +115,38 @@ class VCL_KD(VCL):
     
     def config_next_task_parms(self,t,sess,x_train_task,y_train_task,clss,rpath='./',*args,**kargs):
         ## only consider single head for now ##
-        self.data_distill(x_train_task,y_train_task,sess,t,clss=clss,rpath=rpath)
+        if self.coreset_type == 'distill':
+            self.data_distill(x_train_task,y_train_task,sess,t,clss=clss,rpath=rpath)
         if self.enable_kd_reg:
             self.task_var_cfg = {}
-            for core_x,core_y in zip(self.core_sets[0],self.core_sets[1]):
-                y_lables = np.sum(core_y,axis=0)
-                for c,y in enumerate(y_lables):
-                    if y == 0:
-                        continue                    
-                    x_hat = core_x[core_y[:,c]==1]                      
-                    for w,b in zip(self.qW,self.qB):
-                        #print('x_hat {},w {}, b {}'.format(x_hat.shape,w.shape,b.shape))
-                        pre_w_mu = sess.run(self.parm_var[w][0])
-                        pre_w_sigma = sess.run(tf.exp(self.parm_var[w][1]))
-                        pre_b_mu = sess.run(self.parm_var[b][0])
-                        pre_b_sigma = sess.run(tf.exp(self.parm_var[b][1]))
-                        a_dist = Wrapped_Marginal(get_acts_dist(x_hat,pre_w_mu,pre_w_sigma,pre_b_mu,pre_b_sigma))
-                                        
-                        w_mu = self.parm_var[w][0]
-                        w_sigma = tf.exp(self.parm_var[w][1])
-                        b_mu = self.parm_var[b][0]
-                        b_sigma = tf.exp(self.parm_var[b][1])
+            if self.coreset_type == 'stein':
+                core_x = np.vstack(sess.run(self.core_sets[0]))
+            else:
+                core_x = np.vstack(self.core_sets[0])
+            core_y = np.vstack(self.core_sets[1])
+            y_lables = np.sum(core_y,axis=0)
+                
+            #print('core x',type(core_x))
+            for c,y in enumerate(y_lables):
+                if y == 0:
+                    continue  
+                x_hat = core_x[core_y[:,c]==1]                      
+                for w,b in zip(self.qW,self.qB):
+                    #print('x_hat {},w {}, b {}'.format(x_hat.shape,w.shape,b.shape))
+                    pre_w_mu = sess.run(self.parm_var[w][0])
+                    pre_w_sigma = sess.run(tf.exp(self.parm_var[w][1]))
+                    pre_b_mu = sess.run(self.parm_var[b][0])
+                    pre_b_sigma = sess.run(tf.exp(self.parm_var[b][1]))
+                    a_dist = Wrapped_Marginal(get_acts_dist(x_hat,pre_w_mu,pre_w_sigma,pre_b_mu,pre_b_sigma))
+                                    
+                    w_mu = self.parm_var[w][0]
+                    w_sigma = tf.exp(self.parm_var[w][1])
+                    b_mu = self.parm_var[b][0]
+                    b_sigma = tf.exp(self.parm_var[b][1])
 
-                        qa_dist = Wrapped_Marginal(get_acts_dist(x_hat,w_mu,w_sigma,b_mu,b_sigma))
-                        self.task_var_cfg[a_dist] = qa_dist
-                        x_hat = forward_dense_layer(x_hat,pre_w_mu,pre_b_mu,self.ac_fn)
+                    qa_dist = Wrapped_Marginal(get_acts_dist(x_hat,w_mu,w_sigma,b_mu,b_sigma))
+                    self.task_var_cfg[a_dist] = qa_dist
+                    x_hat = forward_dense_layer(x_hat,pre_w_mu,pre_b_mu,self.ac_fn)
             if self.enable_vcl_reg:
                 super(VCL_KD,self).config_next_task_parms(t,sess,*args,**kargs)
         else:

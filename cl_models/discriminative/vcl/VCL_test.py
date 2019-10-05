@@ -280,9 +280,9 @@ if args.vcl_type=='vanilla':
     scale = 1.
 elif args.vcl_type=='kd':
     args.model_type = 'continual' # can only be continual for vcl_kd
-    Model = VCL_KD(net_shape,x_ph,y_ph,num_heads,batch_size,args.coreset_size,conv=conv,dropout=dropout,vi_type=args.vi_type,\
-                initialization=initialization,ac_fn=ac_fn,n_samples=args.num_samples,local_rpm=args.local_rpm,\
-                enable_kd_reg=args.kd_reg,enable_vcl_reg=args.kd_vcl_reg)
+    Model = VCL_KD(net_shape,x_ph,y_ph,num_heads,batch_size,args.coreset_size,args.coreset_type,args.coreset_usage,\
+                conv=conv,dropout=dropout,vi_type=args.vi_type,initialization=initialization,ac_fn=ac_fn,n_samples=args.num_samples,\
+                local_rpm=args.local_rpm,enable_kd_reg=args.kd_reg,enable_vcl_reg=args.kd_vcl_reg)
     scale = 1.
 else:
     raise TypeError('Wrong type of VCL')

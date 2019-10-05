@@ -49,14 +49,14 @@ class VCL_KD(VCL):
  
 
 
-    def data_distill(self, X, Y, sess,t,lr=0.0001,iters=1000,print_iter=100,rpath='./',clss=None,*args,**kargs):
+    def data_distill(self,t,sess,x_train_task,y_train_task,lr=0.0001,iters=1000,print_iter=100,rpath='./',clss=None,*args,**kargs):
         ## distill data for whole training set ##
         if t==0:
             self.distill_opt = config_optimizer(lr,'step',scope='distill')
 
         with tf.variable_scope('distill',reuse=tf.AUTO_REUSE):
             ## to do: change to reuse with assign op ##
-            x_hat_t,Y_hat_t = gen_random_coreset(X,Y,self.coreset_size,clss)
+            x_hat_t,Y_hat_t = gen_random_coreset(x_train_task,y_train_task,self.coreset_size,clss)
             X_hat_t = tf.get_variable(name='X_hat_'+str(t),dtype=tf.float32,initializer=x_hat_t)
        
         ## only consider single head for now ##
@@ -70,7 +70,7 @@ class VCL_KD(VCL):
         ## prepare input list of each layer ##
         H_hat = [X_hat_t] + [tf.squeeze(h) for h in self.H[:-1]]
         KL = 0.
-        x = X
+        x = x_train_task
         for w,b,x_hat in zip(self.qW,self.qB,H_hat):
             w_mu = sess.run(self.parm_var[w][0])
             w_sigma = sess.run(tf.exp(self.parm_var[w][1]))
@@ -115,8 +115,7 @@ class VCL_KD(VCL):
     
     def config_next_task_parms(self,t,sess,x_train_task,y_train_task,clss,rpath='./',*args,**kargs):
         ## only consider single head for now ##
-        if self.coreset_type == 'distill':
-            self.data_distill(x_train_task,y_train_task,sess,t,clss=clss,rpath=rpath)
+
         if self.enable_kd_reg:
             self.task_var_cfg = {}
             if self.coreset_type == 'stein':

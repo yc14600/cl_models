@@ -140,7 +140,9 @@ class VCL(BCL_BNN):
     def update_task_data_and_inference(self,sess,t,task_name,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,out_dim,\
                                     original_batch_size=500,cl_n=2,cl_k=0,cl_cmb=None,*args,**kargs):    
 
-        
+        if self.coreset_type == 'distill':
+            self.data_distill(t,sess,*args,**kargs)
+
         if self.coreset_size>0 and self.coreset_usage != 'final':
             self.x_core_sets,self.y_core_sets,c_cfg = aggregate_coreset(self.core_sets,self.core_y,self.coreset_type,self.num_heads,t,self.n_samples,sess)
         

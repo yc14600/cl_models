@@ -271,3 +271,5 @@ class BCL_BNN(BCL_BASE_MODEL):
         
 
         return x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss
+
+

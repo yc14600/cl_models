@@ -35,6 +35,7 @@ from hsvi import hsvi
 from hsvi.methods.svgd import SVGD
 from utils.data_util import save_samples
 from utils.train_util import shuffle_data
+from utils.model_util import mean_list
 from models.vcl_model import VCL
 from models.vcl_kd import VCL_KD
 from edward.models import Normal,MultivariateNormalTriL
@@ -75,6 +76,7 @@ parser.add_argument('-vcltp','--vcl_type', default='vanilla', type=str,help='vcl
 parser.add_argument('-hdn','--hidden',default=[100,100],type=str2ilist,help='hidden units of each layer of the network')
 parser.add_argument('-kdr','--kd_reg',default=False,type=str2bool,help='if enable kd regularizer for vcl kd')
 parser.add_argument('-kdvr','--kd_vcl_reg',default=True,type=str2bool,help='if enable vcl and kd regularizers together for vcl kd')
+parser.add_argument('-tdt','--task_dst',default=False,type=str2bool,help='if calc task distance')
 
 
 args = parser.parse_args()
@@ -90,11 +92,11 @@ ac_fn = set_ac_fn(args.ac_fn)
 
 dataset = args.dataset
 
-if dataset in ['mnist','fashion','not-mnist']:
+if dataset in ['mnist','fashion','notmnist']:
     DATA_DIR = os.path.join(args.data_path,dataset)
 elif dataset == 'not-notmnist':
     args.task_type = 'cross_split'
-    DATA_DIR = [os.path.join(args.data_path,d) for d in ['mnist','not-mnist']]
+    DATA_DIR = [os.path.join(args.data_path,d) for d in ['mnist','notmnist']]
 elif dataset == 'quickdraw':
     DATA_DIR = os.path.join(args.data_path,'/quickdraw/full/numpy_bitmap/')
 print(dataset, DATA_DIR)
@@ -245,7 +247,7 @@ head = 'multi' if args.multihead else 'single'
 file_name = dataset+'_'+args.vi_type+'_tsize'+str(TRAIN_SIZE)+'_cset'+str(args.coreset_size)+args.coreset_type+'_'+args.coreset_usage+'_nsample'+str(args.num_samples)+'_bsize'+str(batch_size)+'_init'+str(int(args.ginit))\
             +'_e'+str(args.epoch)+'_lit'+str(args.local_iter)+'_'+args.task_type+'_lrpm'+str(args.local_rpm)+'_'+args.grad_type+'_'+head+'_'+args.model_type+'_'+args.vcl_type+'_sd'+str(seed)
 
-file_path = result_path+file_name
+file_path = os.path.join(result_path,file_name)
 file_path = config_result_path(file_path)
 with open(file_path+'configures.txt','w') as f:
     f.write(str(args))
@@ -338,7 +340,7 @@ if args.tensorboard:
 
 # Start training tasks
 test_sets = []
-avg_accs ,acc_record, probs_record = [], [], []
+avg_accs ,acc_record, probs_record, task_dsts,task_sims = [], [], [], [],[]
 pre_parms = {}
 saver = tf.train.Saver()
 tf.global_variables_initializer().run()
@@ -346,9 +348,41 @@ print('num tasks',num_tasks)
 for t in range(num_tasks):
     # get test data
     test_sets.append((x_test_task,y_test_task))
+
     if Model.coreset_size > 0:
         x_train_task,y_train_task = Model.gen_task_coreset(t,x_train_task,y_train_task,args.task_type,sess,cl_n,clss)
+
     
+    if t > 0 and args.task_dst:
+        g_vecs = Model.get_tasks_vec(sess,t,test_sets[:-1]+[(x_train_task,y_train_task)])
+        dsts_t = []
+        for i in range(len(g_vecs)-1):
+            for j in range(i+1,len(g_vecs)):
+                dsts_t.append(calc_similarity(g_vecs[i],g_vecs[j],sess=sess))
+        task_dsts.append(dsts_t)
+        print('task sim',dsts_t)
+        np.savez(file_path+'task_grads_t'+str(t),g_vecs)
+        mean_gvec = mean_list(g_vecs)
+        m_dst = []
+        for gv in g_vecs:
+            m_dst.append(calc_similarity(mean_gvec,gv,sess=sess))
+        print('distance to mean gvec',m_dst)
+        task_sims.append(np.sum(m_dst))
+        print('task {} similarity: {}'.format(t+1,task_sims[-1]))
+        '''
+        if args.coreset_size > 0:
+            #print('coreset shape',Model.core_sets[0][-1].shape,Model.core_sets[1][-1].shape)
+            cg_vecs = Model.get_tasks_vec(sess,t,zip(Model.core_sets[0],Model.core_sets[1]))
+            tg_vec = Model.get_tasks_vec(sess,t,[(x_train_task,y_train_task)])
+            np.savez(file_path+'task_coresets_grads_t'+str(t),cg_vecs,tg_vec) 
+            cdst = []
+            for i in range(len(cg_vecs)):     
+                cdst.append(calc_similarity(cg_vecs[i],tg_vec[0],sess=sess))
+            task_coreset_dst.append(cdst)
+            print('coresets sim',task_coreset_dst[-1])
+        '''
+        
+
     if args.tensorboard:
         Model.train_task(sess,t,x_train_task,y_train_task,args.epoch,print_iter,args.local_iter,\
                         tfb_merged=merged,tfb_writer=train_writer,tfb_avg_losses=[avg_err,avg_kl,avg_ll])
@@ -395,7 +429,11 @@ for t in range(num_tasks):
             if Model.coreset_size>0 and Model.coreset_usage != 'final':
                 Model.x_core_sets,Model.y_core_sets,c_cfg = aggregate_coreset(Model.core_sets,Model.core_y,Model.coreset_type,Model.num_heads,t,Model.n_samples,sess)
             tf.global_variables_initializer().run()
-            Model.inference.reinitialize(task_id=t+1,coresets={'task':c_cfg})
+            if args.coreset_size > 0:
+                Model.inference.reinitialize(task_id=t+1,coresets={'task':c_cfg})
+            else:
+                Model.inference.reinitialize(task_id=t+1)
+
 
 with open(file_path+'accuracy_record.csv','w') as f:
     writer = csv.writer(f,delimiter=',')
@@ -405,6 +443,14 @@ with open(file_path+'accuracy_record.csv','w') as f:
 with open(file_path+'avg_accuracy.csv','w') as f:
     writer = csv.writer(f,delimiter=',')
     writer.writerow(avg_accs)
+    writer.writerow(task_sims)
+
+
+with open(file_path+'task_distances.csv','w') as f:
+    writer = csv.writer(f,delimiter=',')
+    for t in range(len(task_dsts)):
+        writer.writerow(task_dsts[t])
+    
 
 if not args.save_parm and args.coreset_usage=='final':
     os.system('rm '+file_path+"ssmodel.ckpt*")

@@ -174,3 +174,26 @@ class VCL(BCL_BNN):
 
         return x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss
 
+
+    def get_tasks_vec(self,sess,t,test_sets):
+        vecs = []
+        
+        for ts in test_sets:
+            #print('ts shape',ts[0].shape,ts[1].shape)
+            ty = np.expand_dims(ts[1],axis=0)
+            ty = np.repeat(ty,self.n_samples,axis=0)
+            feed_dict={self.x_ph:ts[0],self.y_ph:ty}
+
+            if self.coreset_size > 0:
+                if t > 0 and self.coreset_usage != 'final':
+                    if self.num_heads > 1:
+                        for k in range(t):
+                            feed_dict.update({self.core_x_ph[k]:self.x_core_sets[k]})
+                    else:    
+                        feed_dict.update({self.core_x_ph:self.x_core_sets})
+            vars_list = get_vars_by_scope(scope='task')
+            grads = tf.gradients(self.inference.ll, vars_list)
+            g_vec = sess.run(grads,feed_dict)
+            vecs.append(g_vec)
+
+        return vecs

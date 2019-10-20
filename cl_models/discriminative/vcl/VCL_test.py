@@ -340,7 +340,7 @@ if args.tensorboard:
 
 # Start training tasks
 test_sets = []
-avg_accs ,acc_record, probs_record, task_dsts,task_sims = [], [], [], [],[]
+avg_accs ,acc_record, probs_record, task_dsts,task_sims,t2m_sims = [], [], [], [],[],[]
 pre_parms = {}
 saver = tf.train.Saver()
 tf.global_variables_initializer().run()
@@ -368,6 +368,7 @@ for t in range(num_tasks):
             m_dst.append(calc_similarity(mean_gvec,gv,sess=sess))
         print('distance to mean gvec',m_dst)
         task_sims.append(np.sum(m_dst))
+        t2m_sims.append(m_dst)
         print('task {} similarity: {}'.format(t+1,task_sims[-1]))
         '''
         if args.coreset_size > 0:
@@ -450,6 +451,11 @@ with open(file_path+'task_distances.csv','w') as f:
     writer = csv.writer(f,delimiter=',')
     for t in range(len(task_dsts)):
         writer.writerow(task_dsts[t])
+
+with open(file_path+'t2m_distances.csv','w') as f:
+    writer = csv.writer(f,delimiter=',')
+    for t in range(len(t2m_sims)):
+        writer.writerow(t2m_sims[t])
     
 
 if not args.save_parm and args.coreset_usage=='final':

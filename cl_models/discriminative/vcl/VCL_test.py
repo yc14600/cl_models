@@ -191,6 +191,7 @@ elif 'cross_split' in args.task_type:
 
 elif 'split' in args.task_type:
     if dataset == 'cifar':
+        conv =True
         hidden = [512,512]
         (X_TRAIN, Y_TRAIN), (X_TEST, Y_TEST) = cifar10.load_data() 
         # standardize data
@@ -257,18 +258,23 @@ with open(file_path+'configures.txt','w') as f:
 
 if args.ginit > 0:
     # set init value of variance
-    initialization={'w_s':-1.*args.ginit,'b_s':-1.*args.ginit,'cw_s':-1*args.ginit}
+    initialization={'w_s':-1.*args.ginit,'b_s':-1.*args.ginit,'cw_s':-2*args.ginit}
 else:
     initialization=None
 
 if conv:
-    x_ph = tf.placeholder(dtype=tf.float32,shape=[None]+list(x_train_task.shape[1:]))
+    x_ph = tf.placeholder(dtype=tf.float32,shape=[None,*x_train_task.shape[1:]])
     in_dim = None
     dropout = 0.5
+    conv_net_shape = [[3,3,3,32],[3,3,32,32]]
+    strides = [[1,2,2,1],[1,1,1,1]]
+    pooling = True
 else:
     x_ph = tf.placeholder(dtype=tf.float32,shape=[None,x_train_task.shape[1]])
     in_dim = x_train_task.shape[1]
     dropout = None
+    conv_net_shape,strides = None, None
+    pooling = False
 
 y_ph = tf.placeholder(dtype=tf.int32,shape=[args.num_samples,None,out_dim]) 
 
@@ -278,7 +284,8 @@ net_shape = [in_dim]+hidden+[out_dim]
 
 if args.vcl_type=='vanilla':
     Model = VCL(net_shape,x_ph,y_ph,num_heads,batch_size,args.coreset_size,args.coreset_type,args.coreset_usage,\
-                args.vi_type,conv,dropout,initialization=initialization,ac_fn=ac_fn,n_samples=args.num_samples,local_rpm=args.local_rpm)
+                args.vi_type,conv,dropout,initialization=initialization,ac_fn=ac_fn,n_samples=args.num_samples,\
+                local_rpm=args.local_rpm,conv_net_shape=conv_net_shape,strides=strides,pooling=pooling)
     scale = 1.
 elif args.vcl_type=='kd':
     args.model_type = 'continual' # can only be continual for vcl_kd

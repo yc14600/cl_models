@@ -38,7 +38,6 @@ class BCL_BASE_MODEL(ABC):
         self.x_ph = x_ph
         self.y_ph = y_ph
         self.conv = conv
-
         return
 
 

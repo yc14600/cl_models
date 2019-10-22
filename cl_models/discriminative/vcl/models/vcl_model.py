@@ -44,10 +44,11 @@ from tensorflow.python.keras.datasets import cifar10,cifar100
 class VCL(BCL_BNN):
     def __init__(self,net_shape,x_ph,y_ph,num_heads=1,batch_size=500,coreset_size=0,coreset_type='random',\
                     coreset_usage='regret',vi_type='KLqp_analytic',conv=False,dropout=None,initialization=None,\
-                    ac_fn=tf.nn.relu,n_smaples=1,local_rpm=False,*args,**kargs):
+                    ac_fn=tf.nn.relu,n_smaples=1,local_rpm=False,conv_net_shape=None,strides=None,pooling=False,*args,**kargs):
 
         super(VCL,self).__init__(net_shape,x_ph,y_ph,num_heads,batch_size,coreset_size,coreset_type,\
-                    coreset_usage,vi_type,conv,dropout,initialization,ac_fn,n_smaples,local_rpm)
+                    coreset_usage,vi_type,conv,dropout,initialization,ac_fn,n_smaples,local_rpm,conv_net_shape,\
+                    strides,pooling,*args,**kargs)
 
         self.define_model(initialization,dropout)
 

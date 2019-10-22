@@ -29,14 +29,16 @@ class BCL_BNN(BCL_BASE_MODEL):
 
     def __init__(self,net_shape,x_ph,y_ph,num_heads=1,batch_size=512,coreset_size=0,coreset_type='random',\
                     coreset_usage='regret',vi_type='KLqp_analytic',conv=False,dropout=None,initialization=None,\
-                    ac_fn=tf.nn.relu,n_smaples=1,local_rpm=False,*args,**kargs):
+                    ac_fn=tf.nn.relu,n_smaples=1,local_rpm=False,conv_net_shape=None,strides=None,pooling=False,*args,**kargs):
         
         super(BCL_BNN,self).__init__(net_shape,x_ph,y_ph,num_heads,batch_size,coreset_size,coreset_type,\
                     coreset_usage,vi_type,conv,ac_fn)
 
         self.n_samples = n_smaples
         self.local_rpm = local_rpm
-
+        self.conv_net_shape = conv_net_shape
+        self.strides = strides
+        self.pooling = pooling
 
         return
 
@@ -45,7 +47,7 @@ class BCL_BNN(BCL_BASE_MODEL):
     def define_model(self,initialization=None,dropout=None,*args,**kargs):
         with tf.variable_scope('task'):
             if self.conv:
-                self.conv_W,conv_parm_var,self.conv_h = cifar_model(self.x_ph,self.batch_size,local_rpm=self.local_rpm,initialization=initialization)
+                self.conv_W,conv_parm_var,self.conv_h = build_bayes_conv_net(self.x_ph,self.batch_size,self.conv_net_shape,self.strides,pooling=self.pooling,local_rpm=self.local_rpm,initialization=initialization)
                 in_x = self.conv_h
                 self.net_shape[0] = in_x.shape[1].value
                 
@@ -73,7 +75,6 @@ class BCL_BNN(BCL_BASE_MODEL):
 
     def config_coresets(self,qW,qB,conv_W=None,core_x_ph=None,core_sets=[[],[]],K=None,*args,**kargs):
 
-        # only support multihead for cifar task  
         if K is None:
             K = self.num_heads
 
@@ -85,16 +86,22 @@ class BCL_BNN(BCL_BASE_MODEL):
                 for k in range(K):  
                     core_yk = forward_nets(qW[k],qB[k],core_x_ph[k],ac_fn=self.ac_fn,bayes=True,num_samples=self.n_samples)
                     core_y.append(core_yk)
+
             else:
                 for k in range(K):
-                    ## to do: change to general function ##
-                    h_k = forward_cifar_model(core_x_ph[k],conv_W,self.batch_size)
+                    h_k = forward_bayes_conv_net(core_x_ph[k],conv_W,self.strides,pooling=self.pooling) 
                     core_yk = forward_nets(qW[k],qB[k],h_k,ac_fn=self.ac_fn,bayes=True,num_samples=self.n_samples)
                     core_y.append(core_yk)
         else:
             if core_x_ph is None:
                 core_x_ph = tf.placeholder(dtype=tf.float32,shape=self.x_ph.shape)
-            core_y = forward_nets(qW,qB,core_x_ph,ac_fn=self.ac_fn,bayes=True,num_samples=self.n_samples)
+            
+            if conv_W is not None:
+                h = forward_bayes_conv_net(core_x_ph,conv_W,self.strides,pooling=self.pooling) 
+            else:
+                h = core_x_ph
+
+            core_y = forward_nets(qW,qB,h,ac_fn=self.ac_fn,bayes=True,num_samples=self.n_samples)
     
         self.core_x_ph = core_x_ph  
         self.core_y = core_y  

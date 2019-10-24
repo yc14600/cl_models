@@ -266,10 +266,14 @@ else:
     initialization=None
 
 if conv:
+
     x_ph = tf.placeholder(dtype=tf.float32,shape=[None,*x_train_task.shape[1:]])
     in_dim = None
     dropout = 0.5
-    conv_net_shape = [[3,3,3,32],[3,3,32,32]]
+    if dataset == 'cifar':
+        conv_net_shape = [[3,3,3,32],[3,3,32,32]]
+    else:
+        conv_net_shape = [[4,4,1,32],[4,4,32,32]]
     strides = [[1,2,2,1],[1,1,1,1]]
     pooling = True
 

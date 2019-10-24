@@ -204,8 +204,8 @@ elif 'split' in args.task_type:
         else:
             out_dim = 100
 
-        Y_TRAIN = one_hot_encoder(Y_TRAIN.reshape(-1),out_dim)
-        Y_TEST = one_hot_encoder(Y_TEST.reshape(-1),out_dim)
+        #Y_TRAIN = one_hot_encoder(Y_TRAIN.reshape(-1),out_dim)
+        #Y_TEST = one_hot_encoder(Y_TEST.reshape(-1),out_dim)
 
         # first task use all cifar10 data
         x_train_task,y_train_task,x_test_task,y_test_task = X_TRAIN,Y_TRAIN,X_TEST,Y_TEST

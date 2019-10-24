@@ -39,6 +39,7 @@ class BCL_BNN(BCL_BASE_MODEL):
         self.conv_net_shape = conv_net_shape
         self.strides = strides
         self.pooling = pooling
+        print('pooling',pooling)
 
         return
 

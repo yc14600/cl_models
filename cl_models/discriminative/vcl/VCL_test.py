@@ -195,6 +195,7 @@ elif 'split' in args.task_type:
         conv =True
         hidden = [512,512]
         (X_TRAIN, Y_TRAIN), (X_TEST, Y_TEST) = cifar100.load_data() 
+        Y_TRAIN,Y_TEST = Y_TRAIN.reshape(-1), Y_TEST.reshape(-1)
         # standardize data
         X_TRAIN,X_TEST = standardize_flatten(X_TRAIN,X_TEST,flatten=False)
         print('data shape',X_TRAIN.shape)

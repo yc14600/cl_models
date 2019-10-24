@@ -263,7 +263,7 @@ with open(file_path+'configures.txt','w') as f:
 
 if args.ginit > 0:
     # set init value of variance
-    initialization={'w_s':-1.*args.ginit,'b_s':-1.*args.ginit,'cw_s':-2*args.ginit}
+    initialization={'w_s':-1.*args.ginit,'b_s':-1.*args.ginit,'cw_s':-1*args.ginit}
 else:
     initialization=None
 

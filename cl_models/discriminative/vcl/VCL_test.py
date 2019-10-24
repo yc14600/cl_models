@@ -217,7 +217,7 @@ elif 'split' in args.task_type:
         #(X_TRAIN, Y_TRAIN), (X_TEST, Y_TEST) = cifar100.load_data() 
         #X_TRAIN,X_TEST = standardize_flatten(X_TRAIN,X_TEST,flatten=False)
 
-        clss = cl_cmb[cl_k:cl_k+cl_n]
+        #clss = cl_cmb[cl_k:cl_k+cl_n]
     else:
         data = input_data.read_data_sets(DATA_DIR) 
         X_TRAIN = np.concatenate([data.train.images,data.validation.images],axis=0)

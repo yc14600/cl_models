@@ -206,15 +206,16 @@ elif 'split' in args.task_type:
 
         #Y_TRAIN = one_hot_encoder(Y_TRAIN.reshape(-1),out_dim)
         #Y_TEST = one_hot_encoder(Y_TEST.reshape(-1),out_dim)
-
-        # first task use all cifar10 data
-        x_train_task,y_train_task,x_test_task,y_test_task = X_TRAIN,Y_TRAIN,X_TEST,Y_TEST
-        # load cifar 100
-        #(X_TRAIN, Y_TRAIN), (X_TEST, Y_TEST) = cifar100.load_data() 
-        #X_TRAIN,X_TEST = standardize_flatten(X_TRAIN,X_TEST,flatten=False)
         cl_cmb = np.arange(100)
         cl_k = 0
         cl_n = 10
+        # first task use all cifar10 data
+        x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = gen_next_task_data(args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,\
+                                                                    cl_n=cl_n,cl_k=cl_k,cl_cmb=cl_cmb,out_dim=out_dim,num_heads=num_heads) #X_TRAIN,Y_TRAIN,X_TEST,Y_TEST
+        # load cifar 100
+        #(X_TRAIN, Y_TRAIN), (X_TEST, Y_TEST) = cifar100.load_data() 
+        #X_TRAIN,X_TEST = standardize_flatten(X_TRAIN,X_TEST,flatten=False)
+
         clss = cl_cmb[cl_k:cl_k+cl_n]
     else:
         data = input_data.read_data_sets(DATA_DIR) 

@@ -99,7 +99,7 @@ elif dataset == 'not-notmnist':
     DATA_DIR = [os.path.join(args.data_path,d) for d in ['mnist','notmnist']]
 elif dataset == 'quickdraw':
     DATA_DIR = os.path.join(args.data_path,'/quickdraw/full/numpy_bitmap/')
-print(dataset, DATA_DIR)
+print(dataset)
 
 
 hidden = args.hidden #[256,256]
@@ -463,7 +463,11 @@ with open(file_path+'t2m_distances.csv','w') as f:
     writer = csv.writer(f,delimiter=',')
     for t in range(len(t2m_sims)):
         writer.writerow(t2m_sims[t])
-    
+'''
+if args.irt:
+    for t,ts in enumerate(test_sets):
+        save_samples(file_path,[*ts],file_name=['test_samples_t'+str(t),'test_labels_t'+str(t)])
+'''
 
 if not args.save_parm and args.coreset_usage=='final':
     os.system('rm '+file_path+"ssmodel.ckpt*")

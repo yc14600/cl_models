@@ -222,6 +222,8 @@ elif 'split' in args.task_type:
         Y_TRAIN = np.concatenate([data.train.labels,data.validation.labels],axis=0)
         X_TEST = data.test.images
         Y_TEST = data.test.labels
+        if conv:
+            X_TRAIN,X_TEST = X_TRAIN.reshape(-1,28,28,1),X_TEST.reshape(-1,28,28,1)
         
         if num_heads > 1:
             out_dim = 2
@@ -270,6 +272,7 @@ if conv:
     conv_net_shape = [[3,3,3,32],[3,3,32,32]]
     strides = [[1,2,2,1],[1,1,1,1]]
     pooling = True
+
 else:
     x_ph = tf.placeholder(dtype=tf.float32,shape=[None,x_train_task.shape[1]])
     in_dim = x_train_task.shape[1]

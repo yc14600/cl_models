@@ -77,6 +77,7 @@ parser.add_argument('-hdn','--hidden',default=[100,100],type=str2ilist,help='hid
 parser.add_argument('-kdr','--kd_reg',default=False,type=str2bool,help='if enable kd regularizer for vcl kd')
 parser.add_argument('-kdvr','--kd_vcl_reg',default=True,type=str2bool,help='if enable vcl and kd regularizers together for vcl kd')
 parser.add_argument('-tdt','--task_dst',default=False,type=str2bool,help='if calc task distance')
+parser.add_argument('-cv','--conv',default=False,type=str2bool,help='if use CNN on top')
 
 
 args = parser.parse_args()
@@ -116,7 +117,7 @@ prior_type = 'normal'
 #n_samples = 20
 gaussian_type = 'logvar'
 
-conv = False
+conv = args.conv
 
 # In[8]:
 

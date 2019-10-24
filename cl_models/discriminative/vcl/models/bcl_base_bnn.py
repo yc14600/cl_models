@@ -127,8 +127,8 @@ class BCL_BNN(BCL_BASE_MODEL):
             core_x_set = x_train_task[idx]
             '''
             core_x_set,core_y_set = gen_random_coreset(x_train_task,y_train_task,self.coreset_size,clss)
-            
-        
+            print('core x {}'.format(core_x_set.shape))
+            print('core y {}, {}'.format(core_y_set.shape,core_y_set[:3]))
         elif 'rdproj' in self.coreset_type:
             if 'split' in task_name:
                 core_x_set,core_y_set = gen_rdproj_coreset(x_train_task,y_train_task,self.coreset_size,cl_n,clss)

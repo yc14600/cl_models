@@ -194,7 +194,7 @@ elif 'split' in args.task_type:
     if dataset == 'cifar':
         conv =True
         hidden = [512,512]
-        (X_TRAIN, Y_TRAIN), (X_TEST, Y_TEST) = cifar10.load_data() 
+        (X_TRAIN, Y_TRAIN), (X_TEST, Y_TEST) = cifar100.load_data() 
         # standardize data
         X_TRAIN,X_TEST = standardize_flatten(X_TRAIN,X_TEST,flatten=False)
         print('data shape',X_TRAIN.shape)
@@ -210,8 +210,8 @@ elif 'split' in args.task_type:
         # first task use all cifar10 data
         x_train_task,y_train_task,x_test_task,y_test_task = X_TRAIN,Y_TRAIN,X_TEST,Y_TEST
         # load cifar 100
-        (X_TRAIN, Y_TRAIN), (X_TEST, Y_TEST) = cifar100.load_data() 
-        X_TRAIN,X_TEST = standardize_flatten(X_TRAIN,X_TEST,flatten=False)
+        #(X_TRAIN, Y_TRAIN), (X_TEST, Y_TEST) = cifar100.load_data() 
+        #X_TRAIN,X_TEST = standardize_flatten(X_TRAIN,X_TEST,flatten=False)
         cl_cmb = np.arange(100)
         cl_k = 0
         cl_n = 10

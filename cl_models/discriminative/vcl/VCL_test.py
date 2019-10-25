@@ -273,10 +273,12 @@ if conv:
     in_dim = None
     dropout = 0.5
     if dataset == 'cifar':
-        conv_net_shape = [[3,3,3,32],[3,3,32,32]]
+        conv_net_shape = [[3,3,3,32],[3,3,32,32],[3,3,32,64],[3,3,64,64]]
+        strides = [[1,2,2,1],[1,2,2,1],[1,2,2,1],[1,1,1,1]]
     else:
         conv_net_shape = [[4,4,1,32],[4,4,32,32]]
-    strides = [[1,2,2,1],[1,1,1,1]]
+        strides = [[1,2,2,1],[1,1,1,1]]
+    
     pooling = True
 
 else:

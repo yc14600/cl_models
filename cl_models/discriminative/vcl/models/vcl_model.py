@@ -1,17 +1,8 @@
 
-# coding: utf-8
-
-# In[1]:
-
-
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-
-# In[2]:
-#import matplotlib.pyplot as plt
-#from IPython import display
 import numpy as np
 import scipy as sp
 import csv
@@ -23,21 +14,11 @@ import sys
 
 import tensorflow as tf
 import edward as ed
-# In[3]:
 
 from .bcl_base_bnn import BCL_BNN
 from utils.model_util import *
 from utils.train_util import *
 from utils.coreset_util import *
-
-
-# In[4]:
-
-from hsvi.methods.svgd import SVGD
-from edward.models import Normal,MultivariateNormalTriL
-from tensorflow.examples.tutorials.mnist import input_data
-from tensorflow.python.keras.datasets import cifar10,cifar100
-
 
 
 
@@ -62,7 +43,7 @@ class VCL(BCL_BNN):
         return
 
     
-    def define_model(self,initialization=None,dropout=None):
+    def define_model(self,initialization=None,dropout=None,*args,**kargs):
         
         super(VCL,self).define_model(initialization,dropout)
         

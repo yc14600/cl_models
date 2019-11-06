@@ -85,14 +85,14 @@ class BCL_BNN(BCL_BASE_MODEL):
             core_y = []
             if conv_W is None:
                 for k in range(K):  
-                    core_yk = forward_nets(qW[k],qB[k],core_x_ph[k],ac_fn=self.ac_fn,bayes=True,num_samples=self.n_samples)
-                    core_y.append(core_yk)
+                    core_Hk = forward_nets(qW[k],qB[k],core_x_ph[k],ac_fn=self.ac_fn,bayes=True,num_samples=self.n_samples)
+                    core_y.append(core_Hk[-1])
 
             else:
                 for k in range(K):
                     h_k = forward_bayes_conv_net(core_x_ph[k],conv_W,self.strides,pooling=self.pooling) 
-                    core_yk = forward_nets(qW[k],qB[k],h_k,ac_fn=self.ac_fn,bayes=True,num_samples=self.n_samples)
-                    core_y.append(core_yk)
+                    core_Hk = forward_nets(qW[k],qB[k],h_k,ac_fn=self.ac_fn,bayes=True,num_samples=self.n_samples)
+                    core_y.append(core_Hk[-1])
         else:
             if core_x_ph is None:
                 core_x_ph = tf.placeholder(dtype=tf.float32,shape=self.x_ph.shape)
@@ -102,7 +102,7 @@ class BCL_BNN(BCL_BASE_MODEL):
             else:
                 h = core_x_ph
 
-            core_y = forward_nets(qW,qB,h,ac_fn=self.ac_fn,bayes=True,num_samples=self.n_samples)
+            core_y = forward_nets(qW,qB,h,ac_fn=self.ac_fn,bayes=True,num_samples=self.n_samples)[-1]
     
         self.core_x_ph = core_x_ph  
         self.core_y = core_y  

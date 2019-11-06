@@ -374,7 +374,9 @@ for t in range(num_tasks):
 
     
     if t > 0 and args.task_dst:
-        g_vecs = Model.get_tasks_vec(sess,t,test_sets[:-1]+[(x_train_task,y_train_task)])
+        g_vecs = Model.get_tasks_vec(sess,t,list(zip(Model.core_sets[0],Model.core_sets[1]))+[(x_train_task,y_train_task)])
+
+        #g_vecs = Model.get_tasks_vec(sess,t,test_sets[:-1]+[(x_train_task,y_train_task)])
         dsts_t = []
         for i in range(len(g_vecs)-1):
             for j in range(i+1,len(g_vecs)):

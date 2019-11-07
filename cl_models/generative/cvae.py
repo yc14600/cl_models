@@ -19,9 +19,10 @@ class Continual_VAE(VAE):
 
     def update_inference(self):
         self.save_params()
-        pqz = Normal(loc=self.prev_eH[-1],scale=tf.maximum(self.prev_z_sigma,1e-4))
-        self.inference.latent_vars[self.scope] = {pqz:self.qz}
+        
         if self.bayes:
+            pqz = Normal(loc=0.,scale=self.prior_std)
+            self.inference.latent_vars[self.scope] = {pqz:self.qz}
             for w,b,qw,qb in zip(self.prev_eW,self.prev_eB,self.eW,self.eB):
                 self.inference.latent_vars[self.scope].update({w:qw,b:qb})
 
@@ -30,6 +31,9 @@ class Continual_VAE(VAE):
 
             self.inference.latent_vars[self.scope].update({self.prev_sigma_w:self.sigma_w,self.prev_sigma_b:self.sigma_b})
 
+        else:
+            pqz = Normal(loc=self.prev_eH[-1],scale=tf.maximum(self.prev_z_sigma,1e-4))
+            self.inference.latent_vars[self.scope] = {pqz:self.qz}
         self.inference.reinitialize(self)
 
 

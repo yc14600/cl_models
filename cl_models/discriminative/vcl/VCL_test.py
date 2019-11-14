@@ -38,6 +38,7 @@ from utils.train_util import shuffle_data
 from utils.model_util import mean_list
 from models.vcl_model import VCL
 from models.vcl_kd import VCL_KD
+from models.stein_cl import Stein_CL
 from edward.models import Normal,MultivariateNormalTriL
 from tensorflow.examples.tutorials.mnist import input_data
 from tensorflow.python.keras.datasets import cifar10,cifar100
@@ -52,6 +53,7 @@ parser.add_argument('-rp','--result_path',default='./results/',type=str,help='th
 parser.add_argument('-ttp','--task_type', default='split', type=str, help='task type can be split, permuted, cross split, batch')
 parser.add_argument('-vtp','--vi_type', default='KLqp_analytic', type=str, help='type of variational inference')
 parser.add_argument('-e','--epoch', default=50, type=int, help='number of epochs')
+parser.add_argument('-pe','--print_epoch', default=1, type=int, help='number of epochs of printing loss')
 parser.add_argument('-csz','--coreset_size', default=0, type=int, help='size of each class in a coreset')
 parser.add_argument('-ctp','--coreset_type', default='random', type=str, help='type of coresets, can be random,stein,kcenter')
 parser.add_argument('-cus','--coreset_usage', default='regret', type=str, help='usage type of coresets, can be regret, final')
@@ -72,12 +74,14 @@ parser.add_argument('-irt','--irt', default=False, type=str2bool, help='generate
 parser.add_argument('-tb','--tensorboard', default=False, type=str2bool, help='enable tensorboard')
 parser.add_argument('-mtp','--model_type', default='continual', type=str,help='model type can be continual,single')
 parser.add_argument('-fim','--save_FIM', default=False,type=str2bool,help='save Fisher Info Matrix of the model')
-parser.add_argument('-vcltp','--vcl_type', default='vanilla', type=str,help='vcl type can be vanilla,kd')
+parser.add_argument('-vcltp','--vcl_type', default='vanilla', type=str,help='vcl type can be vanilla,kd,stein')
 parser.add_argument('-hdn','--hidden',default=[100,100],type=str2ilist,help='hidden units of each layer of the network')
 parser.add_argument('-kdr','--kd_reg',default=False,type=str2bool,help='if enable kd regularizer for vcl kd')
 parser.add_argument('-kdvr','--kd_vcl_reg',default=True,type=str2bool,help='if enable vcl and kd regularizers together for vcl kd')
 parser.add_argument('-tdt','--task_dst',default=False,type=str2bool,help='if calc task distance')
 parser.add_argument('-cv','--conv',default=False,type=str2bool,help='if use CNN on top')
+parser.add_argument('-B','--B',default=3,type=int,help='number of particle batches in Stein VCL')
+parser.add_argument('-eta','--eta',default=0.001,type=float,help='learning rate of meta Stein gradients')
 
 
 args = parser.parse_args()
@@ -109,7 +113,7 @@ shrink = 1. #shrink train_size, smaller gives larger weights of KL-term
 
 
 decay=(1000,0.9)
-print_iter = 10
+
 
 share_type = 'isotropic'
 prior_type = 'normal'
@@ -261,7 +265,7 @@ with open(file_path+'configures.txt','w') as f:
 # In[16]:
 # Initialize model
 
-if args.ginit > 0:
+if args.ginit > 0 and args.vcl_type != 'stein':
     # set init value of variance
     initialization={'w_s':-1.*args.ginit,'b_s':-1.*args.ginit,'cw_s':-1*args.ginit}
 else:
@@ -289,7 +293,10 @@ else:
     conv_net_shape,strides = None, None
     pooling = False
 
-y_ph = tf.placeholder(dtype=tf.int32,shape=[args.num_samples,None,out_dim]) 
+if args.vcl_type != 'stein':
+    y_ph = tf.placeholder(dtype=tf.int32,shape=[args.num_samples,None,out_dim]) 
+else:
+    y_ph = tf.placeholder(dtype=tf.float32,shape=[None,out_dim]) 
 
 net_shape = [in_dim]+hidden+[out_dim]
 
@@ -306,6 +313,11 @@ elif args.vcl_type=='kd':
                 conv=conv,dropout=dropout,vi_type=args.vi_type,initialization=initialization,ac_fn=ac_fn,n_samples=args.num_samples,\
                 local_rpm=args.local_rpm,enable_kd_reg=args.kd_reg,enable_vcl_reg=args.kd_vcl_reg)
     scale = 1.
+elif args.vcl_type=='stein':
+    Model = Stein_CL(net_shape,x_ph,y_ph,num_heads,batch_size,args.coreset_size,args.coreset_type,args.coreset_usage,\
+                conv=conv,dropout=dropout,vi_type=args.vi_type,initialization=initialization,ac_fn=ac_fn,n_samples=args.num_samples,\
+                local_rpm=args.local_rpm,enable_kd_reg=args.kd_reg,enable_vcl_reg=args.kd_vcl_reg,B=args.B,eta=args.eta,K=args.local_iter)
+
 else:
     raise TypeError('Wrong type of VCL')
 
@@ -407,10 +419,10 @@ for t in range(num_tasks):
         
 
     if args.tensorboard:
-        Model.train_task(sess,t,x_train_task,y_train_task,args.epoch,print_iter,args.local_iter,\
+        Model.train_task(sess,t,x_train_task,y_train_task,args.epoch,args.print_epoch,args.local_iter,\
                         tfb_merged=merged,tfb_writer=train_writer,tfb_avg_losses=[avg_err,avg_kl,avg_ll])
     else:
-        Model.train_task(sess,t,x_train_task,y_train_task,args.epoch,print_iter,args.local_iter)
+        Model.train_task(sess,t,x_train_task,y_train_task,args.epoch,args.print_epoch,args.local_iter)
 
     if args.save_parm:
         Model.save_parm(t,file_path,sess)

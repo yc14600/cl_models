@@ -60,11 +60,13 @@ class BCL_BNN(BCL_BASE_MODEL):
             if self.num_heads==1:
                 print('single head net')
                 self.qW,self.qB,self.H,self.TS,self.qW_samples,self.qB_samples,self.parm_var = build_nets(self.net_shape,in_x,bayes=True,ac_fn=self.ac_fn,share='isotropic',\
-                                                                                                        initialization=initialization,dropout=dropout,num_samples=self.n_samples,gaussian_type='logvar',local_rpm=self.local_rpm)
+                                                                                                        initialization=initialization,dropout=dropout,num_samples=self.n_samples,\
+                                                                                                        gaussian_type='logvar',local_rpm=self.local_rpm)
             else:
                 print('multi-head net')
                 self.qW_list,self.qB_list,self.H_list,self.TS,self.qW_list_samples,self.qB_list_samples,self.parm_var = build_nets(self.net_shape,in_x,bayes=True,ac_fn=self.ac_fn,share='isotropic',\
-                                                                                                            initialization=initialization,dropout=dropout,num_samples=self.n_samples,gaussian_type='logvar',num_heads=self.num_heads,local_rpm=self.local_rpm)
+                                                                                                            initialization=initialization,dropout=dropout,num_samples=self.n_samples,gaussian_type='logvar',\
+                                                                                                            num_heads=self.num_heads,local_rpm=self.local_rpm)
                 self.qW,self.qB,self.H = self.qW_list[0],self.qB_list[0],self.H_list[0]
                 self.qW_samples,self.qB_samples = self.qW_list_samples[0],self.qB_list_samples[0]
                 #print('last layer',self.qW_list[-1][-1].shape)
@@ -74,7 +76,7 @@ class BCL_BNN(BCL_BASE_MODEL):
         return 
 
 
-    def config_coresets(self,qW,qB,conv_W=None,core_x_ph=None,core_sets=[[],[]],K=None,*args,**kargs):
+    def config_coresets(self,qW,qB,conv_W=None,core_x_ph=None,core_sets=[[],[]],K=None,bayes=True,bayes_ouput=True,*args,**kargs):
 
         if K is None:
             K = self.num_heads
@@ -85,13 +87,13 @@ class BCL_BNN(BCL_BASE_MODEL):
             core_y = []
             if conv_W is None:
                 for k in range(K):  
-                    core_Hk = forward_nets(qW[k],qB[k],core_x_ph[k],ac_fn=self.ac_fn,bayes=True,num_samples=self.n_samples)
+                    core_Hk = forward_nets(qW[k],qB[k],core_x_ph[k],ac_fn=self.ac_fn,bayes=bayes,num_samples=self.n_samples,bayes_output=bayes_ouput)
                     core_y.append(core_Hk[-1])
 
             else:
                 for k in range(K):
                     h_k = forward_bayes_conv_net(core_x_ph[k],conv_W,self.strides,pooling=self.pooling) 
-                    core_Hk = forward_nets(qW[k],qB[k],h_k,ac_fn=self.ac_fn,bayes=True,num_samples=self.n_samples)
+                    core_Hk = forward_nets(qW[k],qB[k],h_k,ac_fn=self.ac_fn,bayes=bayes,num_samples=self.n_samples,bayes_output=bayes_ouput)
                     core_y.append(core_Hk[-1])
         else:
             if core_x_ph is None:
@@ -102,7 +104,7 @@ class BCL_BNN(BCL_BASE_MODEL):
             else:
                 h = core_x_ph
 
-            core_y = forward_nets(qW,qB,h,ac_fn=self.ac_fn,bayes=True,num_samples=self.n_samples)[-1]
+            core_y = forward_nets(qW,qB,h,ac_fn=self.ac_fn,bayes=bayes,num_samples=self.n_samples,bayes_output=bayes_ouput)[-1]
     
         self.core_x_ph = core_x_ph  
         self.core_y = core_y  
@@ -230,7 +232,7 @@ class BCL_BNN(BCL_BASE_MODEL):
     
         return
 
-    def test_all_tasks(self,t,test_sets,sess,epoch=10,saver=None,file_path=None,*args,**kargs):
+    def test_all_tasks(self,t,test_sets,sess,epoch=10,saver=None,file_path=None,bayes=True,bayes_output=True,*args,**kargs):
         # test on all tasks 
         #if acc_record is None:
         #    acc_record = []
@@ -240,9 +242,9 @@ class BCL_BNN(BCL_BASE_MODEL):
                                         self.batch_size,epoch,sess,self.inference)
 
         if self.num_heads > 1:  
-            accs, probs = test_tasks(t,test_sets,self.qW_list,self.qB_list,self.num_heads,self.x_ph,self.ac_fn,self.batch_size,sess,conv_h=self.conv_h)       
+            accs, probs = test_tasks(t,test_sets,self.qW_list,self.qB_list,self.num_heads,self.x_ph,self.ac_fn,self.batch_size,sess,conv_h=self.conv_h,bayes=bayes,bayes_output=bayes_output)       
         else:
-            accs, probs = test_tasks(t,test_sets,self.qW,self.qB,self.num_heads,self.x_ph,self.ac_fn,self.batch_size,sess,conv_h=self.conv_h)        
+            accs, probs = test_tasks(t,test_sets,self.qW,self.qB,self.num_heads,self.x_ph,self.ac_fn,self.batch_size,sess,conv_h=self.conv_h,bayes=bayes,bayes_output=bayes_output)        
         
         #acc_record.append(accs)  
         # reset variables

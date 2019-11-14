@@ -117,23 +117,26 @@ class VCL(BCL_BNN):
         return 
 
 
-
-
-    def update_task_data_and_inference(self,sess,t,task_name,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,out_dim,\
-                                    original_batch_size=500,cl_n=2,cl_k=0,cl_cmb=None,*args,**kargs):    
+    def update_task_data(self,sess,t,task_name,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,out_dim,\
+                        original_batch_size=500,cl_n=2,cl_k=0,cl_cmb=None,*args,**kargs): 
 
         if self.coreset_type == 'distill':
             self.data_distill(t,sess,*args,**kargs)
 
         if self.coreset_size>0 and self.coreset_usage != 'final':
-            self.x_core_sets,self.y_core_sets,c_cfg = aggregate_coreset(self.core_sets,self.core_y,self.coreset_type,self.num_heads,t,self.n_samples,sess)
+            self.x_core_sets,self.y_core_sets,c_cfg = aggregate_coreset(self.core_sets,self.core_y,self.coreset_type,\
+                                                                        self.num_heads,t,self.n_samples,sess)
+
+        x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = super(VCL,self).update_task_data(sess,t,task_name,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,out_dim,original_batch_size,cl_n,cl_k,cl_cmb)
         
+        return x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss,c_cfg
+
+
+    def update_inference(self,sess,t,c_cfg,*args,**kargs):
+
         ## re-configure priors ##
         self.config_next_task_parms(t,sess,*args,**kargs)
-
-        # update data and inference for next task         
-        x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = super(VCL,self).update_task_data(sess,t,task_name,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,out_dim,original_batch_size,cl_n,cl_k,cl_cmb)
-
+        
         self.inference.latent_vars['task'] = self.task_var_cfg
         if self.coreset_size>0 and self.coreset_usage != 'final':
             #self.x_core_sets,self.y_core_sets,c_cfg = aggregate_coreset(self.core_sets,self.core_y,self.coreset_type,self.num_heads,t,self.n_samples,sess)
@@ -153,6 +156,16 @@ class VCL(BCL_BNN):
                 sess.run(tf.variables_initializer(self.task_optimizer[0].variables()))
             else:
                 self.inference.reinitialize(task_id=t+1)
+
+
+
+    def update_task_data_and_inference(self,sess,t,task_name,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,out_dim,\
+                                    original_batch_size=500,cl_n=2,cl_k=0,cl_cmb=None,*args,**kargs):    
+
+        ## update data for next task         
+        x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss,c_cfg = self.update_task_data(sess,t,task_name,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,out_dim,original_batch_size,cl_n,cl_k,cl_cmb)
+        ## update inference for next task
+        self.update_inference(sess,t,c_cfg)
 
         return x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss
 

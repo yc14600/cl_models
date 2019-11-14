@@ -64,15 +64,15 @@ class BCL_BASE_MODEL(ABC):
 
     
     def config_optimizer(self,starter_learning_rate,decay=None, grad_type='adam',*agrs,**kargs):
-        with tf.variable_scope('task'):
+        #with tf.variable_scope('task'):
             #if self.conv:
             #    self.task_optimizer = config_optimizer(starter_learning_rate,'task_step','adam',decay=decay)
             #else:
-            self.task_optimizer = config_optimizer(starter_learning_rate,'task_step',grad_type)
+        self.task_optimizer = config_optimizer(starter_learning_rate,'task_step',grad_type,scope='task')
 
         if self.coreset_size > 0 and 'stein' in self.coreset_type:
-            with tf.variable_scope('stein'):
-                self.stein_optimizer = config_optimizer(starter_learning_rate,'stein_step',grad_type,decay=decay)
+            #with tf.variable_scope('stein'):
+            self.stein_optimizer = config_optimizer(starter_learning_rate,'stein_step',grad_type,decay=decay,scope='stein')
 
         return
 

@@ -139,9 +139,8 @@ class BCL_BNN(BCL_BASE_MODEL):
 
         elif 'distill' in self.coreset_type:
             return x_train_task,y_train_task
-        else:
-            raise TypeError('Non-supported coreset type!') 
-
+        
+        
         self.core_sets[1].append(core_y_set)
         curnt_core_y_data = expand_nsamples(self.core_sets[1][-1],self.n_samples)
         if self.coreset_usage == 'final' and 'rdproj' not in self.coreset_type:
@@ -256,18 +255,18 @@ class BCL_BNN(BCL_BASE_MODEL):
 
 
     def update_task_data(self,sess,t,task_name,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,out_dim,\
-                            original_batch_size=500,cl_n=2,cl_k=0,cl_cmb=None,*args,**kargs):    
+                        original_batch_size=500,cl_n=2,cl_k=0,cl_cmb=None,train_size=-1,test_size=-1,*args,**kargs):    
         # update data and inference for next task 
-        
+        print('train size {}, test_size {}'.format(train_size,test_size))
         if 'permuted' in task_name:
-            x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = gen_next_task_data(task_name,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,sd=t+1)
+            x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = gen_next_task_data(task_name,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,sd=t+1,train_size=train_size,test_size=test_size)
         
         elif 'cross_split' in task_name:
-            x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = gen_next_task_data(task_name,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,sd=t+1,cl_k=cl_k,out_dim=out_dim)
+            x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = gen_next_task_data(task_name,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,sd=t+1,cl_k=cl_k,out_dim=out_dim,train_size=train_size,test_size=test_size)
         
 
         elif 'split' in task_name:
-            x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = gen_next_task_data(task_name,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,cl_n=cl_n,out_dim=out_dim,num_heads=self.num_heads,cl_cmb=cl_cmb,cl_k=cl_k)
+            x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = gen_next_task_data(task_name,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,cl_n=cl_n,out_dim=out_dim,num_heads=self.num_heads,cl_cmb=cl_cmb,cl_k=cl_k,train_size=train_size,test_size=test_size)
         
             TRAIN_SIZE = x_train_task.shape[0]    
             #TEST_SIZE = x_test_task.shape[0]

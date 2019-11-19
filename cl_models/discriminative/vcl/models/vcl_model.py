@@ -118,7 +118,8 @@ class VCL(BCL_BNN):
 
 
     def update_task_data(self,sess,t,task_name,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,out_dim,\
-                        original_batch_size=500,cl_n=2,cl_k=0,cl_cmb=None,*args,**kargs): 
+                        original_batch_size=500,cl_n=2,cl_k=0,cl_cmb=None,train_size=-1,\
+                        test_size=-1,*args,**kargs): 
 
         if self.coreset_type == 'distill':
             self.data_distill(t,sess,*args,**kargs)
@@ -127,7 +128,8 @@ class VCL(BCL_BNN):
             self.x_core_sets,self.y_core_sets,c_cfg = aggregate_coreset(self.core_sets,self.core_y,self.coreset_type,\
                                                                         self.num_heads,t,self.n_samples,sess)
 
-        x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = super(VCL,self).update_task_data(sess,t,task_name,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,out_dim,original_batch_size,cl_n,cl_k,cl_cmb)
+        x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = super(VCL,self).update_task_data(sess,t,task_name,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,\
+                                                                                            out_dim,original_batch_size,cl_n,cl_k,cl_cmb,train_size,test_size)
         
         return x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss,c_cfg
 
@@ -160,10 +162,11 @@ class VCL(BCL_BNN):
 
 
     def update_task_data_and_inference(self,sess,t,task_name,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,out_dim,\
-                                    original_batch_size=500,cl_n=2,cl_k=0,cl_cmb=None,*args,**kargs):    
+                                    original_batch_size=500,cl_n=2,cl_k=0,cl_cmb=None,train_size=-1,test_size=-1,*args,**kargs):    
 
         ## update data for next task         
-        x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss,c_cfg = self.update_task_data(sess,t,task_name,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,out_dim,original_batch_size,cl_n,cl_k,cl_cmb)
+        x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss,c_cfg = self.update_task_data(sess,t,task_name,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,\
+                                                                                                out_dim,original_batch_size,cl_n,cl_k,cl_cmb,train_size,test_size)
         ## update inference for next task
         self.update_inference(sess,t,c_cfg)
 

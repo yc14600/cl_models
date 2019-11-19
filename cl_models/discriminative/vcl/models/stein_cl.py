@@ -37,7 +37,7 @@ class Stein_CL(VCL):
         self.eta = eta # meta learning rate
         self.K = K # number of iterations of meta stein gradients
         self.lambda_reg = lambda_reg # multiplier of regularization
-        print('Stein_CL: B {}, K {}, eta {}'.format(B,eta,K))
+        print('Stein_CL: B {}, K {}, eta {}'.format(B,K,eta))
         super(Stein_CL,self).__init__(net_shape,x_ph,y_ph,num_heads,batch_size,coreset_size,coreset_type,\
                     coreset_usage,vi_type,conv,dropout,initialization,ac_fn,n_smaples,local_rpm,conv_net_shape,\
                     strides,pooling,*args,**kargs)
@@ -76,7 +76,7 @@ class Stein_CL(VCL):
             grads_b = tf.gradients(loss_b,self.qW+self.qB)
             self.grads_b_list.append(grads_b)
 
-            print('b,{},grads,{}'.format(b,self.grads_b_list[-1]))
+            #print('b,{},grads,{}'.format(b,self.grads_b_list[-1]))
             W_hat = []
             reg = 0.
             for w,gb in zip(self.qW+self.qB,grads_b):
@@ -84,13 +84,13 @@ class Stein_CL(VCL):
                 reg += tf.reduce_sum(self.W_prior.log_prob(w_hat))
                 W_hat.append(w_hat)
             H_b = forward_nets(W_hat[:len(self.qW)],W_hat[len(self.qW):],self.x_ph,ac_fn=self.ac_fn,bayes_output=False)
-            print('H_b',H_b[-1],'y_ph',self.y_ph)
+            #print('H_b',H_b[-1],'y_ph',self.y_ph)
             ll = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=H_b[-1],labels=self.y_ph))
             self.grad_logtp_list.append(tf.gradients(ll-reg,W_hat))
 
     
     def init_inference(self,learning_rate,decay=None,grad_type='adam',*args,**kargs):
-        self.config_optimizer(starter_learning_rate=learning_rate,decay=decay,grad_type=grad_type)
+        self.config_optimizer(starter_learning_rate=learning_rate,decay=decay,grad_type='adam')
         self.config_inference(*args,**kargs)
 
         return
@@ -112,40 +112,59 @@ class Stein_CL(VCL):
         assert(self.coreset_size > 0)
         #print(self.x_b_list,self.y_b_list)
         if t > 0:
-            n = int(t/(self.B-1)) # number of tasks in one particle batch
-            r = int(t%(self.B-1))
+            n = int(self.B/(t+1)) # number of tasks in one particle batch
+            r = int(self.B%(t+1))
             #print('n {}, r {}'.format(n,r))
-            if n == 0:
-                for b in range(self.B - 1):                
-                    coresets_x_b, coresets_y_b = self.x_core_sets, self.y_core_sets
-                    bids = np.random.choice(len(coresets_x_b),size=self.batch_size)
-                    feed_dict.update({self.x_b_list[b]:coresets_x_b[bids],self.y_b_list[b]:coresets_y_b[bids]})
-                
-                bids = np.random.choice(len(x_train_task),size=self.batch_size,replace=False)
-                feed_dict.update({self.x_b_list[-1]:x_train_task[bids],self.y_b_list[-1]:y_train_task[bids]})
+            #if n == 0:
+            
+            bids = np.random.choice(len(self.x_core_sets),size=self.batch_size*(n*t+r))
 
-            else: 
-                coresets_x = np.vstack(self.core_sets[0])
-                coresets_y = np.vstack(self.core_sets[1])
-                coresets_x, coresets_y = shuffle_data(coresets_x, coresets_y)
-                bids = np.random.choice(len(coresets_x),size=self.batch_size*(self.B-1))
-                for b in range(self.B - 1):
-                    #coresets_x_b = np.vstack(self.core_sets[0][b*n:(b+1)*n])
-                    #coresets_y_b = np.vstack(self.core_sets[1][b*n:(b+1)*n])
-                    #coresets_x_b, coresets_y_b = shuffle_data(coresets_x_b, coresets_y_b)
-                    #bids = np.random.choice(len(coresets_x),size=self.batch_size)
-                    feed_dict.update({self.x_b_list[b]:coresets_x[bids[b*self.batch_size:(b+1)*self.batch_size]],self.y_b_list[b]:coresets_y[bids[b*self.batch_size:(b+1)*self.batch_size]]})
-
-                cids = np.random.choice(len(x_train_task),size=self.coreset_size,replace=False)
-                coresets_x_b = np.vstack(self.core_sets[0][-r:]+[x_train_task[cids]])
-                coresets_y_b = np.vstack(self.core_sets[1][-r:]+[y_train_task[cids]])
-                bids = np.random.choice(len(coresets_x_b),size=self.batch_size)
-                feed_dict.update({self.x_b_list[-1]:coresets_x_b[bids],self.y_b_list[-1]:coresets_y_b[bids]})
+            cids = np.random.choice(self.batch_size,size=self.batch_size*n)
+            coreset_x = np.vstack([self.x_core_sets[bids],feed_dict[self.x_ph][cids]])
+            coreset_y = np.vstack([self.y_core_sets[bids],feed_dict[self.y_ph][cids]])
+            #coreset_x,coreset_y = shuffle_data(coreset_x,coreset_y)
+            for b in range(self.B):                
+                #coresets_x_b, coresets_y_b = self.x_core_sets, self.y_core_sets
+                #bids = np.random.choice(len(self),size=self.batch_size)
+                feed_dict.update({self.x_b_list[b]:coreset_x[b*self.batch_size:(b+1)*self.batch_size],self.y_b_list[b]:coreset_y[b*self.batch_size:(b+1)*self.batch_size]})
+            #
+            #print('len core x',len(self.core_sets[0]))
+            '''
+            b = 0
+            x_sets = [*self.core_sets[0][:-1],feed_dict[self.x_ph]]
+            y_sets = [*self.core_sets[1][:-1],feed_dict[self.y_ph]]
+            for x,y in zip(x_sets,y_sets):
+                bids = np.random.choice(len(x),size=self.batch_size*n)
+                for i in range(n):
+                    #print('i {}, b {}'.format(i,b))
+                    feed_dict.update({self.x_b_list[b]:x[bids[i*self.batch_size:(i+1)*self.batch_size]],self.y_b_list[b]:y[bids[i*self.batch_size:(i+1)*self.batch_size]]})
+                    b+=1
+            '''
+            x_sets = np.vstack([self.x_core_sets[:self.batch_size*t],feed_dict[self.x_ph]])
+            y_sets = np.vstack([self.y_core_sets[:self.batch_size*t],feed_dict[self.y_ph]])
+            x_sets,y_sets = shuffle_data(x_sets,y_sets)
+            '''
+            if r > 0:
+                bids = np.random.choice(len(x_sets),size=self.batch_size*r)
+                for i in range(r):
+                    
+                    feed_dict.update({self.x_b_list[b]:x_sets[bids[i*self.batch_size:(i+1)*self.batch_size]],self.y_b_list[b]:y_sets[bids[i*self.batch_size:(i+1)*self.batch_size]]})
+                    b+=1            
+            '''
+            #n = int(self.batch_size/(t+1)) 
+            #r = int(self.batch_size%(t+1))
+            #x_sets = np.vstack([x[:n] for x in self.core_sets[0][:-1]]+[feed_dict[self.x_ph][:n+r]])
+            #y_sets = np.vstack([y[:n] for y in self.core_sets[1][:-1]]+[feed_dict[self.y_ph][:n+r]])
+            feed_dict[self.x_ph] = x_sets
+            feed_dict[self.y_ph] = y_sets
+            
+            
+            #feed_dict.update({self.x_b_list[-1]:feed_dict[self.x_ph][bids],self.y_b_list[-1]:feed_dict[self.y_ph][bids]})
 
         else:
-            for b in range(self.B):  
-                bids = np.random.choice(len(x_train_task),size=self.batch_size,replace=False)
-                feed_dict.update({self.x_b_list[b]:x_train_task[bids],self.y_b_list[b]:y_train_task[bids]})
+            bids = np.random.choice(self.batch_size,size=self.batch_size*self.B)
+            for b in range(self.B):                  
+                feed_dict.update({self.x_b_list[b]:feed_dict[self.x_ph][bids[b*self.batch_size:(b+1)*self.batch_size]],self.y_b_list[b]:feed_dict[self.y_ph][bids[b*self.batch_size:(b+1)*self.batch_size]]})
 
         #print('feed dict',feed_dict.keys())
         self.inference.update(sess=sess,K=self.K,feed_dict=feed_dict)
@@ -271,8 +290,10 @@ class Meta_Stein_Inference:
 
     
     def update(self,sess,K=1,feed_dict=None,*args,**kargs):
+        #print('before',sess.run(self.grads_b_list[0][0][0][0],feed_dict))
         for _ in range(K):
             self.update_meta_grads()
+        #print('after',sess.run(self.grads_b_list[0][0][0][0],feed_dict))
         sess.run(self.train, feed_dict)
 
         return

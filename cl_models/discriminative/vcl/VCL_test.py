@@ -168,7 +168,8 @@ if  args.task_type in ['permuted', 'batch']:
     cl_cmb = None
     # generate data for first task
     if 'permuted' in args.task_type:
-        x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = gen_next_task_data(args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST)
+        x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = gen_next_task_data(args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,\
+                                                                                        train_size=args.train_size,test_size=args.test_size)
     else:
         x_train_task,y_train_task,x_test_task,y_test_task = X_TRAIN, Y_TRAIN, X_TEST, Y_TEST
         clss = None
@@ -215,7 +216,7 @@ elif 'split' in args.task_type:
         cl_k = 0
         cl_n = 10
         # first task use all cifar10 data
-        x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = gen_next_task_data(args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,\
+        x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = gen_next_task_data(args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,train_size=args.train_size,test_size=args.test_size,\
                                                                     cl_n=cl_n,cl_k=cl_k,cl_cmb=cl_cmb,out_dim=out_dim,num_heads=num_heads) #X_TRAIN,Y_TRAIN,X_TEST,Y_TEST
         # load cifar 100
         #(X_TRAIN, Y_TRAIN), (X_TEST, Y_TEST) = cifar100.load_data() 
@@ -240,8 +241,8 @@ elif 'split' in args.task_type:
         cl_k = 0
         cl_n = 2
         
-        x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = gen_next_task_data(args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,\
-                                                                    cl_n=cl_n,cl_k=cl_k,cl_cmb=cl_cmb,out_dim=out_dim,num_heads=num_heads)
+        x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = gen_next_task_data(args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,train_size=args.train_size,\
+                                                                        test_size=args.test_size,cl_n=cl_n,cl_k=cl_k,cl_cmb=cl_cmb,out_dim=out_dim,num_heads=num_heads)
 
 
 TRAIN_SIZE = x_train_task.shape[0]
@@ -458,7 +459,8 @@ for t in range(num_tasks):
         if args.model_type == 'continual':
             x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = Model.update_task_data_and_inference(sess,t,args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,out_dim,\
                                                                                                         original_batch_size=batch_size,cl_n=cl_n,cl_k=cl_k,cl_cmb=cl_cmb,clss=clss,\
-                                                                                                        x_train_task=x_train_task,y_train_task=y_train_task,rpath=file_path)
+                                                                                                        x_train_task=x_train_task,y_train_task=y_train_task,rpath=file_path,\
+                                                                                                        train_size=args.train_size,test_size=args.test_size)
         elif args.model_type == 'single':
             x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = Model.update_task_data(sess,t,args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,out_dim,original_batch_size=batch_size,cl_n=cl_n,cl_k=cl_k,cl_cmb=cl_cmb)
             if Model.coreset_size>0 and Model.coreset_usage != 'final':

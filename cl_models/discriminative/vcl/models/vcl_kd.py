@@ -25,24 +25,16 @@ class VCL_KD(VCL):
     def __init__(self,net_shape,x_ph,y_ph,num_heads=1,batch_size=500,coreset_size=0,coreset_type='random',\
                 coreset_usage='regret',vi_type='KLqp_analytic',conv=False,\
                 dropout=None,initialization=None,ac_fn=tf.nn.relu,n_smaples=1,local_rpm=False,\
-                enable_kd_reg=True,enable_vcl_reg=True,*args,**kargs):
+                conv_net_shape=None,strides=None,pooling=False,enable_kd_reg=True,enable_vcl_reg=True,*args,**kargs):
         
         
         self.X_hat = None
         self.enable_kd_reg = enable_kd_reg
         self.enable_vcl_reg = enable_vcl_reg
-        '''
-        coreset_type='distill'
-        coreset_usage='distill'
-        
-        if self.enable_kd_reg:
-            if 'GNG' in vi_type:
-                vi_type = 'KLqp_GNG'
-            else:
-                vi_type = 'KLqp'
-        '''
+
         super(VCL_KD,self).__init__(net_shape,x_ph,y_ph,num_heads,batch_size,coreset_size,coreset_type,\
-                    coreset_usage,vi_type,conv,dropout,initialization,ac_fn,n_smaples,local_rpm)
+                    coreset_usage,vi_type,conv,dropout,initialization,ac_fn,n_smaples,local_rpm,\
+                    conv_net_shape,strides,pooling)
 
 
         return
@@ -64,11 +56,14 @@ class VCL_KD(VCL):
             raise NotImplementedError('Not support multihead in distillation currently.')
         
         ## to do: add code for conv later ##
-        if self.conv:
-            raise NotImplementedError('Not support conv=True yet.')
+        #if self.conv:
+        #    raise NotImplementedError('Not support conv=True yet.')
         
         ## prepare input list of each layer ##
-        H_hat = [X_hat_t] + [tf.squeeze(h) for h in self.H[:-1]]
+        if self.conv:
+            H_hat = [self.conv_h] + [tf.squeeze(h) for h in self.H[:-1]]
+        else:
+            H_hat = [X_hat_t] + [tf.squeeze(h) for h in self.H[:-1]]
         KL = 0.
         x = x_train_task
         for w,b,x_hat in zip(self.qW,self.qB,H_hat):

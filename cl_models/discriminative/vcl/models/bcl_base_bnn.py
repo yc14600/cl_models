@@ -23,13 +23,14 @@ from utils.coreset_util import *
 
 from hsvi.hsvi import Hierarchy_SVI
 from hsvi.methods.svgd import SVGD
-
+from edward.models import RandomVariable
 
 class BCL_BNN(BCL_BASE_MODEL):
 
     def __init__(self,net_shape,x_ph,y_ph,num_heads=1,batch_size=512,coreset_size=0,coreset_type='random',\
                     coreset_usage='regret',vi_type='KLqp_analytic',conv=False,dropout=None,initialization=None,\
-                    ac_fn=tf.nn.relu,n_smaples=1,local_rpm=False,conv_net_shape=None,strides=None,pooling=False,*args,**kargs):
+                    ac_fn=tf.nn.relu,n_smaples=1,local_rpm=False,conv_net_shape=None,strides=None,pooling=False,\
+                    coreset_mode='offline',task_type='split',*args,**kargs):
         
         super(BCL_BNN,self).__init__(net_shape,x_ph,y_ph,num_heads,batch_size,coreset_size,coreset_type,\
                     coreset_usage,vi_type,conv,ac_fn)
@@ -40,6 +41,9 @@ class BCL_BNN(BCL_BASE_MODEL):
         self.strides = strides
         self.pooling = pooling
         print('pooling',pooling)
+        self.coreset_mode = coreset_mode
+        self.task_type = task_type
+        print('coreset mode',self.coreset_mode,'task type',task_type)
 
         return
 
@@ -77,7 +81,11 @@ class BCL_BNN(BCL_BASE_MODEL):
 
 
     def config_coresets(self,qW,qB,conv_W=None,core_x_ph=None,core_sets=[[],[]],K=None,bayes=True,bayes_ouput=True,*args,**kargs):
-
+        print('check mode',self.coreset_mode)
+        if self.coreset_mode != 'offline':            
+            self.core_sets = {}
+            return
+       
         if K is None:
             K = self.num_heads
 
@@ -140,7 +148,6 @@ class BCL_BNN(BCL_BASE_MODEL):
         elif 'distill' in self.coreset_type:
             return x_train_task,y_train_task
         
-        
         self.core_sets[1].append(core_y_set)
         curnt_core_y_data = expand_nsamples(self.core_sets[1][-1],self.n_samples)
         if self.coreset_usage == 'final' and 'rdproj' not in self.coreset_type:
@@ -153,12 +160,22 @@ class BCL_BNN(BCL_BASE_MODEL):
             self.core_sets[0].append(core_x_set)
         
         else:  # define stein samples
+            if isinstance(self.qW[0],RandomVariable):
+                qW = [w.loc for w in self.qW]
+                qB = [b.loc for b in self.qB]
+                if self.conv:
+                    cW = [w.loc for w in self.conv_W]
+            else:
+                qW = self.qW
+                qB = self.qB
+                if self.conv:
+                    cW = self.conv_W
             
             with tf.variable_scope('stein_task'+str(t)):
                 if self.conv :
-                    self.stein_core_x,self.stein_core_y,core_sgrad = gen_stein_coreset(core_x_set,curnt_core_y_data,self.qW,self.qB,self.n_samples,self.ac_fn,conv_W=self.conv_W)
+                    self.stein_core_x,self.stein_core_y,core_sgrad = gen_stein_coreset(core_x_set,curnt_core_y_data,qW,qB,self.n_samples,self.ac_fn,conv_W=cW)
                 else:
-                    self.stein_core_x,self.stein_core_y,core_sgrad = gen_stein_coreset(core_x_set,curnt_core_y_data,self.qW,self.qB,self.n_samples,self.ac_fn)
+                    self.stein_core_x,self.stein_core_y,core_sgrad = gen_stein_coreset(core_x_set,curnt_core_y_data,qW,qB,self.n_samples,self.ac_fn)
 
             self.core_sets[0].append(self.stein_core_x)
             self.stein_train = self.stein_optimizer[0].apply_gradients([(core_sgrad,self.stein_core_x)],global_step=self.stein_optimizer[1])
@@ -168,6 +185,61 @@ class BCL_BNN(BCL_BASE_MODEL):
         self.curnt_core_y_data = curnt_core_y_data
 
         return x_train_task,y_train_task
+
+    '''
+    def online_update_coresets(self,t):
+
+        if self.coreset_mode == 'ring_buffer':
+            num_per_task = int(self.coreset_size/(t+1))
+            print('t',t,'num per task',num_per_task)
+            for i in range(t):
+                cx, cy = self.core_sets[0][i], self.core_sets[1][i]
+                if num_per_task < len(cx):
+                    cids = np.random.choice(len(cx),size=num_per_task,replace=False)
+                    self.core_sets[0][i] = cx[cids]
+                    self.core_sets[1][i] = cy[cids]
+            print('coreset size',len(self.core_sets[0]))
+        self.curr_buf = [[],[]]
+    '''
+    def online_update_coresets(self,coreset_size):
+    
+        if self.coreset_mode == 'ring_buffer':
+            num_cl = len(self.core_sets)
+            num_per_cls = int(coreset_size/num_cl)
+            clen = np.array([len(cx) for cx in self.core_sets.values()]) if self.task_type=='split' else np.array([len(cx[0]) for cx in self.core_sets.values()])
+            tot = np.sum(clen[clen<=num_per_cls])
+            num_mem = np.sum(clen>num_per_cls)
+            #print('tot',tot,'num mem',num_mem)
+            if num_mem > 0:
+                mem_size = coreset_size - tot
+                
+                
+                num_per_mem = int(mem_size/num_mem)
+
+                residual = mem_size % num_mem
+                if residual > 0:
+                    clss = np.array(list(self.core_sets.keys()))[clen>num_per_cls]
+                    resd_clss = set(np.random.choice(clss,residual,replace=False))
+                #print('num per mem',num_per_mem,'residual',residual)
+
+            for i in self.core_sets.keys():
+                cx = self.core_sets[i] if self.task_type=='split' else self.core_sets[i][0] 
+                #print('c',len(cx))                             
+                if num_per_cls < len(cx):
+                    tsize = min(len(cx),num_per_mem)
+                    #tsize = num_per_mem+1 if residual>0 and i in resd_clss else num_per_mem
+                    
+                    #print(i,'tsize', tsize,'c',len(cx),'num per mem',num_per_mem,'num per cl',num_per_cls)
+                    
+                    #cids = np.random.choice(len(cx),size=tsize,replace=False)
+                    cx = cx[-tsize:]
+                    if self.task_type == 'split':
+                        self.core_sets[i] = cx
+                    else:
+                        cy = self.core_sets[i][1][-tsize:]
+                        self.core_sets[i] = (cx,cy)
+
+
 
 
     def config_inference(self,TRAIN_SIZE,scale=1.,shrink=1.,*args,**kargs):
@@ -241,16 +313,16 @@ class BCL_BNN(BCL_BASE_MODEL):
                                         self.batch_size,epoch,sess,self.inference)
 
         if self.num_heads > 1:  
-            accs, probs = test_tasks(t,test_sets,self.qW_list,self.qB_list,self.num_heads,self.x_ph,self.ac_fn,self.batch_size,sess,conv_h=self.conv_h,bayes=bayes,bayes_output=bayes_output)       
+            accs, probs,cfm = test_tasks(t,test_sets,self.qW_list,self.qB_list,self.num_heads,self.x_ph,self.ac_fn,self.batch_size,sess,conv_h=self.conv_h,bayes=bayes,bayes_output=bayes_output,*args,**kargs)       
         else:
-            accs, probs = test_tasks(t,test_sets,self.qW,self.qB,self.num_heads,self.x_ph,self.ac_fn,self.batch_size,sess,conv_h=self.conv_h,bayes=bayes,bayes_output=bayes_output)        
+            accs, probs,cfm = test_tasks(t,test_sets,self.qW,self.qB,self.num_heads,self.x_ph,self.ac_fn,self.batch_size,sess,conv_h=self.conv_h,bayes=bayes,bayes_output=bayes_output,*args,**kargs)        
         
         #acc_record.append(accs)  
         # reset variables
         if t > 0 and self.coreset_size > 0 and self.coreset_usage == 'final':
             saver.restore(sess, file_path+"_model.ckpt")
 
-        return accs, probs
+        return accs, probs,cfm
 
 
 

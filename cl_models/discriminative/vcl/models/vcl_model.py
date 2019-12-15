@@ -14,6 +14,7 @@ import sys
 
 import tensorflow as tf
 import edward as ed
+from edward.models import RandomVariable
 
 from .bcl_base_bnn import BCL_BNN
 from utils.model_util import *
@@ -25,12 +26,14 @@ from utils.coreset_util import *
 class VCL(BCL_BNN):
     def __init__(self,net_shape,x_ph,y_ph,num_heads=1,batch_size=500,coreset_size=0,coreset_type='random',\
                     coreset_usage='regret',vi_type='KLqp_analytic',conv=False,dropout=None,initialization=None,\
-                    ac_fn=tf.nn.relu,n_smaples=1,local_rpm=False,conv_net_shape=None,strides=None,pooling=False,*args,**kargs):
+                    ac_fn=tf.nn.relu,n_smaples=1,local_rpm=False,conv_net_shape=None,strides=None,pooling=False,\
+                    coreset_mode='offline',B=-1,task_type='split',*args,**kargs):
 
         super(VCL,self).__init__(net_shape,x_ph,y_ph,num_heads,batch_size,coreset_size,coreset_type,\
                     coreset_usage,vi_type,conv,dropout,initialization,ac_fn,n_smaples,local_rpm,conv_net_shape,\
-                    strides,pooling,*args,**kargs)
-
+                    strides,pooling,coreset_mode=coreset_mode,task_type=task_type,*args,**kargs)
+        self.B = B
+        print('init',initialization)
         self.define_model(initialization,dropout)
 
         self.x_core_sets,self.y_core_sets = None, None
@@ -57,18 +60,36 @@ class VCL(BCL_BNN):
 
 
     def train_update_step(self,t,s,sess,feed_dict,kl=0.,ll=0.,err=0.,local_iter=10,*args,**kargs):
-        if self.coreset_size > 0:
-            if t > 0 and self.coreset_usage != 'final':
-                if self.num_heads > 1:
-                    for k in range(t):
-                        feed_dict.update({self.core_x_ph[k]:self.x_core_sets[k]})
-                else:    
-                    feed_dict.update({self.core_x_ph:self.x_core_sets})
-    
+        if self.B < 0:
+            if self.coreset_size > 0:
+                if t > 0 and self.coreset_usage != 'final':
+                    if self.num_heads > 1:
+                        for k in range(t):
+                            feed_dict.update({self.core_x_ph[k]:self.x_core_sets[k]})
+                    else:    
+                        feed_dict.update({self.core_x_ph:self.x_core_sets})
+        
+                if self.coreset_type == 'stein' and (s+1)%local_iter==0:
+                    sess.run(self.stein_train)
+        else:
+            if t > 0:
+                n = int(self.B/(t+1)) # number of tasks in one particle batch
+                r = int(self.B%(t+1))
+                
+                bids = np.random.choice(len(self.x_core_sets),size=self.batch_size*(n*t+r))
+
+                cids = np.random.choice(self.batch_size,size=self.batch_size*n)
+                coreset_x = np.vstack([self.x_core_sets[bids],feed_dict[self.x_ph][cids]])
+                #print('check shape',self.y_core_sets.shape,self.y_ph.shape)
+                coreset_y = np.vstack([self.y_core_sets[bids],np.squeeze(feed_dict[self.y_ph][cids])])
+                feed_dict[self.x_ph] = coreset_x
+                feed_dict[self.y_ph] = np.expand_dims(coreset_y,axis=0)
+
             if self.coreset_type == 'stein' and (s+1)%local_iter==0:
                 sess.run(self.stein_train)
-        
-        info_dict = self.inference.update(scope='task',feed_dict=feed_dict)
+
+            
+        info_dict = self.inference.update(scope='task',feed_dict=feed_dict,sess=sess)
     
         _kl,_ll = sess.run([self.inference.kl,self.inference.ll],feed_dict=feed_dict)
         kl += _kl
@@ -125,12 +146,21 @@ class VCL(BCL_BNN):
             self.data_distill(t,sess,*args,**kargs)
 
         if self.coreset_size>0 and self.coreset_usage != 'final':
-            self.x_core_sets,self.y_core_sets,c_cfg = aggregate_coreset(self.core_sets,self.core_y,self.coreset_type,\
+            if self.coreset_mode == 'offline':
+                self.x_core_sets,self.y_core_sets,c_cfg = aggregate_coreset(self.core_sets,self.core_y,self.coreset_type,\
                                                                         self.num_heads,t,self.n_samples,sess)
+            else:    
+                #cnum = len(self.core_sets.keys()) 
+                #for c in self.curr_buf.keys():                  
+                #    self.core_sets[c] = self.curr_buf[c]
+                #self.core_sets[1].append(self.curr_buf[1])
+                c_cfg = None
 
         x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = super(VCL,self).update_task_data(sess,t,task_name,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,\
                                                                                             out_dim,original_batch_size,cl_n,cl_k,cl_cmb,train_size,test_size)
         
+        if self.B > 0:
+            c_cfg = {}
         return x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss,c_cfg
 
 
@@ -173,25 +203,48 @@ class VCL(BCL_BNN):
         return x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss
 
 
-    def get_tasks_vec(self,sess,t,test_sets):
-        vecs = []
-        
+    def get_tasks_vec(self,sess,t,test_sets,test_sample=False):
+        vecs,nlls = [],[]
+        vars_list = get_vars_by_scope(scope='task')
         for ts in test_sets:
             #print('ts shape',ts[0].shape,ts[1].shape)
-            ty = np.expand_dims(ts[1],axis=0)
-            ty = np.repeat(ty,self.n_samples,axis=0)
-            feed_dict={self.x_ph:ts[0],self.y_ph:ty}
+            if not test_sample:
+                ty = np.expand_dims(ts[1],axis=0)
+                ty = np.repeat(ty,self.n_samples,axis=0)
+                feed_dict={self.x_ph:ts[0],self.y_ph:ty}
+                if self.coreset_size > 0:
+                    if t > 0 and self.coreset_usage != 'final':
+                        if self.num_heads > 1:
+                            for k in range(t):
+                                feed_dict.update({self.core_x_ph[k]:self.x_core_sets[k]})
+                        else:    
+                            feed_dict.update({self.core_x_ph:self.x_core_sets})
+                
+                grads = tf.gradients(-self.inference.ll, vars_list)
+            else:
+                ty = np.expand_dims(ts[1],axis=0)
+                tx = np.expand_dims(ts[0],axis=0)
 
-            if self.coreset_size > 0:
-                if t > 0 and self.coreset_usage != 'final':
-                    if self.num_heads > 1:
-                        for k in range(t):
-                            feed_dict.update({self.core_x_ph[k]:self.x_core_sets[k]})
-                    else:    
-                        feed_dict.update({self.core_x_ph:self.x_core_sets})
-            vars_list = get_vars_by_scope(scope='task')
-            grads = tf.gradients(self.inference.ll, vars_list)
-            g_vec = sess.run(grads,feed_dict)
+                if isinstance(self.H[-1],RandomVariable):
+                    ty = np.expand_dims(ty,axis=0)
+                    ty = np.repeat(ty,self.n_samples,axis=0)
+                    feed_dict={self.x_ph:tx,self.y_ph:ty}
+                    nll_i = -self.H[-1].log_prob(self.y_ph)
+                    nll = tf.reduce_mean(nll_i)
+                else:
+                    feed_dict={self.x_ph:tx,self.y_ph:ty}
+                    nll_i = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.H[-1],labels=self.y_ph)
+                    nll = tf.reduce_mean(nll_i)
+                    
+                nlls.append(sess.run(nll,feed_dict))
+                
+                grads = tf.gradients(nll, vars_list)
+                for i,g in enumerate(grads):
+                    grads[i] = tf.reshape(g,[-1])
+                
+
+            g_vec = np.concatenate(sess.run(grads,feed_dict))
+
             vecs.append(g_vec)
 
-        return vecs
+        return vecs,np.array(nlls)

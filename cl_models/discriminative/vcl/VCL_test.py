@@ -39,10 +39,12 @@ from utils.model_util import mean_list
 from models.vcl_model import VCL
 from models.vcl_kd import VCL_KD
 from models.stein_cl import Stein_CL
+from cl_models.discriminative.drs.drs_cl import DRS_CL
 from edward.models import Normal,MultivariateNormalTriL
 from tensorflow.examples.tutorials.mnist import input_data
 from tensorflow.python.keras.datasets import cifar10,cifar100
-
+import matplotlib.pyplot as plt
+import seaborn as sn
 # In[5]:
 parser = argparse.ArgumentParser()
 
@@ -53,10 +55,11 @@ parser.add_argument('-rp','--result_path',default='./results/',type=str,help='th
 parser.add_argument('-ttp','--task_type', default='split', type=str, help='task type can be split, permuted, cross split, batch')
 parser.add_argument('-vtp','--vi_type', default='KLqp_analytic', type=str, help='type of variational inference')
 parser.add_argument('-e','--epoch', default=50, type=int, help='number of epochs')
-parser.add_argument('-pe','--print_epoch', default=1, type=int, help='number of epochs of printing loss')
+parser.add_argument('-pe','--print_epoch', default=10, type=int, help='number of epochs of printing loss')
 parser.add_argument('-csz','--coreset_size', default=0, type=int, help='size of each class in a coreset')
 parser.add_argument('-ctp','--coreset_type', default='random', type=str, help='type of coresets, can be random,stein,kcenter')
 parser.add_argument('-cus','--coreset_usage', default='regret', type=str, help='usage type of coresets, can be regret, final')
+parser.add_argument('-cmod','--coreset_mode', default='offline', type=str, help='construction mode of coresets, can be offline, ring_buffer')
 parser.add_argument('-gtp','--grad_type', default='adam', type=str, help='type of gradients optimizer')
 parser.add_argument('-bsz','--batch_size', default=500, type=int, help='batch size')
 parser.add_argument('-trsz','--train_size', default=50000, type=int, help='size of training set')
@@ -80,9 +83,14 @@ parser.add_argument('-kdr','--kd_reg',default=False,type=str2bool,help='if enabl
 parser.add_argument('-kdvr','--kd_vcl_reg',default=True,type=str2bool,help='if enable vcl and kd regularizers together for vcl kd')
 parser.add_argument('-tdt','--task_dst',default=False,type=str2bool,help='if calc task distance')
 parser.add_argument('-cv','--conv',default=False,type=str2bool,help='if use CNN on top')
-parser.add_argument('-B','--B',default=3,type=int,help='number of particle batches in Stein VCL')
+parser.add_argument('-B','--B',default=3,type=int,help='training batch size')
+parser.add_argument('-K','--K',default=10,type=int,help='every K iters update sampling probabilities in DRS weighted EM')
 parser.add_argument('-eta','--eta',default=0.001,type=float,help='learning rate of meta Stein gradients')
-
+parser.add_argument('-disc','--discriminant',default=False,type=str2bool,help='enable discriminant in drs cl')
+parser.add_argument('-lam_dis','--lambda_disc',default=0.001,type=float,help='lambda discriminant')
+parser.add_argument('-lam_reg','--lambda_reg',default=0.0001,type=float,help='lambda regularization')
+parser.add_argument('-wem','--WEM',default=False,type=str2bool,help='enable weighted EM in drs cl')
+parser.add_argument('-bit','--batch_iter',default=1,type=int,help='iterations on one batch')
 
 args = parser.parse_args()
 print(args)
@@ -256,7 +264,7 @@ if not os.path.exists(result_path):
     os.mkdir(result_path)
 head = 'multi' if args.multihead else 'single'
 file_name = dataset+'_'+args.vi_type+'_tsize'+str(TRAIN_SIZE)+'_cset'+str(args.coreset_size)+args.coreset_type+'_'+args.coreset_usage+'_nsample'+str(args.num_samples)+'_bsize'+str(batch_size)+'_init'+str(int(args.ginit))\
-            +'_e'+str(args.epoch)+'_lit'+str(args.local_iter)+'_'+args.task_type+'_lrpm'+str(args.local_rpm)+'_'+args.grad_type+'_'+head+'_'+args.model_type+'_'+args.vcl_type+'_sd'+str(seed)
+            +'_e'+str(args.epoch)+'_lit'+str(args.local_iter)+'_'+args.task_type+'_disc'+str(args.discriminant)+'_'+args.grad_type+'_'+head+'_'+args.model_type+'_'+args.vcl_type+'_sd'+str(seed)
 
 file_path = os.path.join(result_path,file_name)
 file_path = config_result_path(file_path)
@@ -266,7 +274,7 @@ with open(file_path+'configures.txt','w') as f:
 # In[16]:
 # Initialize model
 
-if args.ginit > 0 and args.vcl_type != 'stein':
+if args.ginit > 0 and args.vcl_type in ['vanilla','kd']:
     # set init value of variance
     initialization={'w_s':-1.*args.ginit,'b_s':-1.*args.ginit,'cw_s':-1*args.ginit}
 else:
@@ -294,7 +302,7 @@ else:
     conv_net_shape,strides = None, None
     pooling = False
 
-if args.vcl_type != 'stein':
+if args.vcl_type in ['vanilla','kd']:
     y_ph = tf.placeholder(dtype=tf.int32,shape=[args.num_samples,None,out_dim]) 
 else:
     y_ph = tf.placeholder(dtype=tf.float32,shape=[None,out_dim]) 
@@ -306,7 +314,7 @@ net_shape = [in_dim]+hidden+[out_dim]
 if args.vcl_type=='vanilla':
     Model = VCL(net_shape,x_ph,y_ph,num_heads,batch_size,args.coreset_size,args.coreset_type,args.coreset_usage,\
                 args.vi_type,conv,dropout,initialization=initialization,ac_fn=ac_fn,n_samples=args.num_samples,\
-                local_rpm=args.local_rpm,conv_net_shape=conv_net_shape,strides=strides,pooling=pooling)
+                local_rpm=args.local_rpm,conv_net_shape=conv_net_shape,strides=strides,pooling=pooling,B=args.B,task_type=args.task_type)
     scale = 1.
 elif args.vcl_type=='kd':
     args.model_type = 'continual' # can only be continual for vcl_kd
@@ -317,13 +325,21 @@ elif args.vcl_type=='kd':
 elif args.vcl_type=='stein':
     Model = Stein_CL(net_shape,x_ph,y_ph,num_heads,batch_size,args.coreset_size,args.coreset_type,args.coreset_usage,\
                 conv=conv,dropout=dropout,vi_type=args.vi_type,initialization=initialization,ac_fn=ac_fn,n_samples=args.num_samples,\
-                local_rpm=args.local_rpm,enable_kd_reg=args.kd_reg,enable_vcl_reg=args.kd_vcl_reg,B=args.B,eta=args.eta,K=args.local_iter)
+                local_rpm=args.local_rpm,enable_kd_reg=args.kd_reg,enable_vcl_reg=args.kd_vcl_reg,B=args.B,eta=args.eta,K=args.K,\
+                discriminant=args.discriminant,lambda_dis=args.lambda_disc,WEM=args.WEM)
+
+elif args.vcl_type=='drs':
+    Model = DRS_CL(net_shape,x_ph,y_ph,num_heads,batch_size,args.coreset_size,args.coreset_type,args.coreset_usage,\
+            conv=conv,dropout=dropout,vi_type=args.vi_type,initialization=initialization,ac_fn=ac_fn,n_samples=args.num_samples,\
+            local_rpm=args.local_rpm,enable_kd_reg=args.kd_reg,enable_vcl_reg=args.kd_vcl_reg,B=args.B,eta=args.eta,K=args.K,\
+            discriminant=args.discriminant,lambda_dis=args.lambda_disc,WEM=args.WEM,coreset_mode=args.coreset_mode,\
+            task_type=args.task_type,batch_iter=args.batch_iter,lambda_reg=args.lambda_reg)
 
 else:
     raise TypeError('Wrong type of VCL')
 
 
-Model.init_inference(learning_rate=args.learning_rate,train_size=TRAIN_SIZE,grad_type=args.grad_type,scale=scale)
+Model.init_inference(learning_rate=args.learning_rate,decay=decay,train_size=TRAIN_SIZE,grad_type=args.grad_type,scale=scale)
 
 sess = ed.get_session() 
 
@@ -374,6 +390,7 @@ if args.tensorboard:
 # Start training tasks
 test_sets = []
 avg_accs ,acc_record, probs_record, task_dsts,task_sims,t2m_sims = [], [], [], [],[],[]
+
 pre_parms = {}
 saver = tf.train.Saver()
 tf.global_variables_initializer().run()
@@ -383,20 +400,29 @@ for t in range(num_tasks):
     test_sets.append((x_test_task,y_test_task))
 
     if Model.coreset_size > 0:
-        x_train_task,y_train_task = Model.gen_task_coreset(t,x_train_task,y_train_task,args.task_type,sess,cl_n,clss)
+        if args.coreset_mode=='offline':
+            x_train_task,y_train_task = Model.gen_task_coreset(t,x_train_task,y_train_task,args.task_type,sess,cl_n,clss)
 
-    
-    if t > 0 and args.task_dst:
-        g_vecs = Model.get_tasks_vec(sess,t,list(zip(Model.core_sets[0],Model.core_sets[1]))+[(x_train_task,y_train_task)])
-
+    '''
+    if args.task_dst:
+        #g_vecs = Model.get_tasks_vec(sess,t,list(zip(Model.core_sets[0],Model.core_sets[1]))+[(x_train_task,y_train_task)])
+        g_vecs = Model.get_tasks_vec(sess,t,zip(x_train_task,y_train_task),test_sample=True)
+        print('g vecs len',len(g_vecs))
         #g_vecs = Model.get_tasks_vec(sess,t,test_sets[:-1]+[(x_train_task,y_train_task)])
-        dsts_t = []
+        dsts_t,dsts_v = [], []
         for i in range(len(g_vecs)-1):
             for j in range(i+1,len(g_vecs)):
                 dsts_t.append(calc_similarity(g_vecs[i],g_vecs[j],sess=sess))
-        task_dsts.append(dsts_t)
+                dsts_v.append(calc_similarity(x_train_task[i],x_train_task[j],sess=sess))
+        #task_dsts.append(dsts_t)
+        dsts_t = np.concatenate(dsts_t)
+        dsts_v = np.concatenate(dsts_v)
+        plt.plot(dsts_t,dsts_v)
+        plt.savefig(file_path+'grads_corr'+str(t)+'.pdf')
+        
         print('task sim',dsts_t)
         np.savez(file_path+'task_grads_t'+str(t),g_vecs)
+        
         mean_gvec = mean_list(g_vecs)
         m_dst = []
         for gv in g_vecs:
@@ -405,7 +431,7 @@ for t in range(num_tasks):
         task_sims.append(np.sum(m_dst))
         t2m_sims.append(m_dst)
         print('task {} similarity: {}'.format(t+1,task_sims[-1]))
-        '''
+        
         if args.coreset_size > 0:
             #print('coreset shape',Model.core_sets[0][-1].shape,Model.core_sets[1][-1].shape)
             cg_vecs = Model.get_tasks_vec(sess,t,zip(Model.core_sets[0],Model.core_sets[1]))
@@ -417,7 +443,9 @@ for t in range(num_tasks):
             task_coreset_dst.append(cdst)
             print('coresets sim',task_coreset_dst[-1])
         '''
-        
+    #if args.task_dst and args.coreset_type=='stein':
+    #    px = sess.run(Model.core_sets[0][-1])
+
 
     if args.tensorboard:
         Model.train_task(sess,t,x_train_task,y_train_task,args.epoch,args.print_epoch,args.local_iter,\
@@ -432,7 +460,138 @@ for t in range(num_tasks):
         FIM = get_model_FIM(Model,sess=sess)
         np.save(file_path+'model_FIM_task'+str(t)+'.npy',FIM)
 
-    accs, probs = Model.test_all_tasks(t,test_sets,sess,args.epoch,saver=saver,file_path=file_path)
+    if args.task_dst:
+        #for i in range(t+1):
+        '''
+        cx = np.vstack(Model.core_sets[0]) if Model.coreset_type!='stein' else np.vstack(sess.run(Model.core_sets[0]))
+        cy = np.vstack(Model.core_sets[1])
+        cx,cy = shuffle_data(cx,cy)
+        cx,cy = cx[:min(len(cx),200)],cy[:min(len(cy),200)]
+        '''
+        x = np.vstack([tx[0] for tx in test_sets])
+        y = np.vstack([tx[1] for tx in test_sets])
+        x,y = shuffle_data(x,y)
+        x,y = x[:min(len(x),100)],y[:min(len(y),100)]
+        m_vec,m_label = [],[]
+        for j in range(2*t):
+            ids = Model.y_core_sets[:,j]==1
+            m_vec.append(Model.x_core_sets[ids].mean(axis=0))
+            m_label.append(Model.y_core_sets[ids][0])
+        for j in range(2*t,2*(t+1)):
+            ids = y_train_task[:,j]==1
+            m_vec.append(x_train_task[ids].mean(axis=0))
+            m_label.append(y_train_task[ids][0])
+        m_y = np.vstack(m_label)
+
+
+        #g_vecs = Model.get_tasks_vec(sess,t,list(zip(Model.core_sets[0],Model.core_sets[1]))+[(x_train_task,y_train_task)])
+        #g_vecs = Model.get_tasks_vec(sess,t,zip(cx,cy),test_sample=True)
+        #print('g vecs len',len(g_vecs),g_vecs[0].shape)
+        #g_vecs = Model.get_tasks_vec(sess,t,test_sets[:-1]+[(x_train_task,y_train_task)])
+        #dsts_t,dsts_v = [], []
+        #dsts_t = calc_similarity(np.vstack(g_vecs),sess=sess)
+        #dsts_v = calc_similarity(x,sess=sess) 
+        #print(dsts_t.shape,dsts_v.shape)
+
+        #cmplx = (np.sum(dsts_t)-dsts_t.shape[0])/2.
+        #print('complex',cmplx)
+        #np.savetxt(file_path+'dsts_cx_t'+str(t)+'.csv',dsts_t,delimiter=',')
+        #np.savetxt(file_path+'dsts_v'+str(t)+'.csv',dsts_v,delimiter=',')
+        #np.savetxt(file_path+'dsts_t'+str(t)+'_i'+str(i)+'.csv',dsts_t,delimiter=',')
+        #np.savetxt(file_path+'dsts_v'+str(t)+'_i'+str(i)+'.csv',dsts_v,delimiter=',')
+        #task_dsts.append(dsts_t)
+        #dsts_t = np.concatenate(dsts_t)
+        #dsts_v = np.concatenate(dsts_v)
+        #dsts_t = dsts_t.reshape(-1)
+        #plt.plot(dsts_t,dsts_v,'o')
+        #plt.savefig(file_path+'grads_corr_t'+str(t)+'.pdf')
+        #plt.savefig(file_path+'grads_corr_t'+str(t)+'_i'+str(i)+'.pdf')
+        #plt.close()
+        '''
+        yids = np.matmul(cy,cy.transpose()).reshape(-1)
+        sn.distplot(dsts_t[yids==0])
+        sn.distplot(dsts_t[yids==1])
+        plt.legend(['diff class','same class'])
+        #plt.plot(yids.reshape(-1),dsts_t.reshape(-1),'o')
+        #plt.plot(yids.reshape(-1),dsts_v.reshape(-1),'*')
+        plt.savefig(file_path+'grads_class_corr_cx_t'+str(t)+'.pdf')
+        #plt.savefig(file_path+'grads_class_corr_t'+str(t)+'_i'+str(i)+'.pdf')
+        plt.close()
+        '''
+        g_vecs,nlls = Model.get_tasks_vec(sess,t,zip(x,y),test_sample=True)
+        m_g_vecs,m_nlls = Model.get_tasks_vec(sess,t,zip(m_vec,m_y),test_sample=True)
+        #print('m g vec',np.vstack(m_g_vecs).shape)
+        m_dsts_t = calc_similarity(np.vstack(g_vecs),np.vstack(m_g_vecs),sess=sess)
+        m_dsts_t = np.squeeze(m_dsts_t,axis=1)
+        
+        #dsts_t = calc_similarity(np.vstack(g_vecs),sess=sess)
+        yids = 1.- np.matmul(y,m_y.transpose())
+        #print(m_dsts_t.shape,yids.shape)
+        #rank_t = -(np.sum(dsts_t*yids,axis=0))*0.5/np.sum(yids,axis=0) \
+        #            + ((np.sum(dsts_t*(1.-yids),axis=0)-1.)*0.5)/(np.sum(1.-yids,axis=0)-1.)
+        rank_t = -(np.sum(m_dsts_t*yids,axis=1)*0.5)/np.sum(yids,axis=1) \
+                    + (np.sum(m_dsts_t*(1.-yids),axis=1)*0.5)/np.sum(1.-yids,axis=1)
+        
+        print('rank_t \n {}'.format(rank_t.shape))
+        #rank_l = np.argsort(-nlls)
+        #print('rank_l \n {}'.format((rank_l)))
+        sn.regplot(rank_t,nlls)
+        #sn.scatterplot(rank_t[yids==1],nlls[yids==1])
+        plt.savefig(file_path+'rank_corr'+str(t)+'.pdf')
+        plt.close()
+        #np.savetxt(file_path+'dsts_tx_t'+str(t)+'.csv',dsts_t,delimiter=',')
+        #print('h shape',Model.H[0].shape)
+        
+        hx = sess.run(Model.H,feed_dict={Model.x_ph:x,Model.y_ph:y})
+        hx = np.hstack(hx)
+        yids = 1.- np.matmul(y,y.transpose())
+        print('hx',hx.shape)
+        
+        dsts_v = calc_similarity(hx,sess=sess)
+        np.savetxt(file_path+'dsts_hx_v'+str(t)+'.csv',dsts_v,delimiter=',')
+        rank_v = (np.sum(dsts_v*yids,axis=1)*0.5) \
+                    - (np.sum(dsts_v*(1.-yids),axis=1)*0.5)
+        sn.regplot(rank_v,nlls)
+        #sn.scatterplot(rank_t[yids==1],nlls[yids==1])
+        plt.savefig(file_path+'hx_rank_corr'+str(t)+'.pdf')
+        plt.close()
+
+        '''
+        for i in range(2*(t+1)):
+            sn.distplot(m_dsts_t[:,i][y[:,i]==0])
+            plt.savefig(file_path+'grads_class_corr_tx_t'+str(t)+'_c'+str(i)+'.pdf')
+            plt.close()
+
+            
+            for j in range(i+1,2*(t+1)):
+                ids_ij = (y[:,i]==1) | (y[:,j]==1)
+                dsts_t_ij = dsts_t[ids_ij][:,ids_ij].reshape(-1)
+                yids = np.matmul(y[ids_ij],y[ids_ij].transpose()).reshape(-1)
+                sn.distplot(dsts_t_ij[yids==0])
+                sn.distplot(dsts_t_ij[yids==1])
+                plt.legend(['diff class','same class'])
+                plt.savefig(file_path+'grads_class_corr_tx_t'+str(t)+'_c'+str(i)+str(j)+'.pdf')
+                plt.close()
+
+                
+                dsts_v_ij = dsts_v[ids_ij][:,ids_ij].reshape(-1)
+                sn.scatterplot(x=dsts_t_ij[yids==0],y=dsts_v_ij[yids==0])
+                sn.scatterplot(x=dsts_t_ij[yids==1],y=dsts_v_ij[yids==1])
+                plt.legend(['diff class','same class'])
+                plt.savefig(file_path+'grads_class_euc_corr_hx_t'+str(t)+'_c'+str(i)+str(j)+'.pdf') 
+                plt.close()
+        
+        if args.coreset_type=='stein':
+            
+            g_vecs = Model.get_tasks_vec(sess,t,zip(px,y),test_sample=True)
+            dsts_t = calc_similarity(np.vstack(g_vecs),sess=sess)
+            cmplx = (np.sum(dsts_t)-dsts_t.shape[0])/2.
+            print('prev complex',cmplx)
+        '''
+    accs, probs, cfm = Model.test_all_tasks(t,test_sets,sess,args.epoch,saver=saver,file_path=file_path,confusion=True)
+    print('confusion matrix \n',cfm.astype(int))
+    np.savetxt(file_path+'cfmtx'+str(t)+'.csv',cfm.astype(int),delimiter=',')
+
     acc_record.append(accs)
     avg_accs.append(np.mean(accs))
     if args.irt:
@@ -457,6 +616,7 @@ for t in range(num_tasks):
             cl_k = 0
         '''
         if args.model_type == 'continual':
+            #print('coresets',Model.core_sets)
             x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = Model.update_task_data_and_inference(sess,t,args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,out_dim,\
                                                                                                         original_batch_size=batch_size,cl_n=cl_n,cl_k=cl_k,cl_cmb=cl_cmb,clss=clss,\
                                                                                                         x_train_task=x_train_task,y_train_task=y_train_task,rpath=file_path,\

@@ -91,6 +91,8 @@ parser.add_argument('-lam_dis','--lambda_disc',default=0.001,type=float,help='la
 parser.add_argument('-lam_reg','--lambda_reg',default=0.0001,type=float,help='lambda regularization')
 parser.add_argument('-wem','--WEM',default=False,type=str2bool,help='enable weighted EM in drs cl')
 parser.add_argument('-bit','--batch_iter',default=1,type=int,help='iterations on one batch')
+parser.add_argument('-ntp','--net_type',default='dense',type=str,help='network type, can be dense, conv, resnet18')
+
 
 args = parser.parse_args()
 print(args)
@@ -152,8 +154,8 @@ if not args.multihead:
 else:
     num_heads = num_tasks
 
-if 'cifar' in dataset:
-    conv = True
+#if 'cifar' in dataset:
+#    conv = True
 
 print('heads',num_heads)
 # In[9]:
@@ -204,25 +206,32 @@ elif 'cross_split' in args.task_type:
 
 
 elif 'split' in args.task_type:
-    if dataset == 'cifar':
-        conv =True
-        hidden = [512,512]
-        (X_TRAIN, Y_TRAIN), (X_TEST, Y_TEST) = cifar100.load_data() 
+    if dataset == 'cifar10':
+        
+        if args.net_type == 'resnet18':
+            conv = False
+            hidden = []
+            args.vcl_type = 'drs'
+        else:
+            conv =True
+            hidden = [512,512]
+
+        (X_TRAIN, Y_TRAIN), (X_TEST, Y_TEST) = cifar10.load_data() 
         Y_TRAIN,Y_TEST = Y_TRAIN.reshape(-1), Y_TEST.reshape(-1)
         # standardize data
         X_TRAIN,X_TEST = standardize_flatten(X_TRAIN,X_TEST,flatten=False)
         print('data shape',X_TRAIN.shape)
-        
+        num_tasks = 5
         if num_heads > 1:
-            out_dim = 10
+            out_dim = 2
         else:
-            out_dim = 100
+            out_dim = 10
 
         #Y_TRAIN = one_hot_encoder(Y_TRAIN.reshape(-1),out_dim)
         #Y_TEST = one_hot_encoder(Y_TEST.reshape(-1),out_dim)
-        cl_cmb = np.arange(100)
+        cl_cmb = np.arange(10)
         cl_k = 0
-        cl_n = 10
+        cl_n = 2
         # first task use all cifar10 data
         x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = gen_next_task_data(args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,train_size=args.train_size,test_size=args.test_size,\
                                                                     cl_n=cl_n,cl_k=cl_k,cl_cmb=cl_cmb,out_dim=out_dim,num_heads=num_heads) #X_TRAIN,Y_TRAIN,X_TEST,Y_TEST
@@ -280,8 +289,15 @@ if args.ginit > 0 and args.vcl_type in ['vanilla','kd']:
 else:
     initialization=None
 
-if conv:
 
+if args.net_type == 'resnet18':
+    x_ph = tf.placeholder(dtype=tf.float32,shape=[None,*x_train_task.shape[1:]])
+    in_dim = None
+    dropout = None
+    conv_net_shape,strides = None, None
+    pooling = False
+
+elif conv:
     x_ph = tf.placeholder(dtype=tf.float32,shape=[None,*x_train_task.shape[1:]])
     in_dim = None
     dropout = 0.5
@@ -333,7 +349,7 @@ elif args.vcl_type=='drs':
             conv=conv,dropout=dropout,vi_type=args.vi_type,initialization=initialization,ac_fn=ac_fn,n_samples=args.num_samples,\
             local_rpm=args.local_rpm,enable_kd_reg=args.kd_reg,enable_vcl_reg=args.kd_vcl_reg,B=args.B,eta=args.eta,K=args.K,\
             discriminant=args.discriminant,lambda_dis=args.lambda_disc,WEM=args.WEM,coreset_mode=args.coreset_mode,\
-            task_type=args.task_type,batch_iter=args.batch_iter,lambda_reg=args.lambda_reg)
+            task_type=args.task_type,batch_iter=args.batch_iter,lambda_reg=args.lambda_reg,net_type=args.net_type)
 
 else:
     raise TypeError('Wrong type of VCL')

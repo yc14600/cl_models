@@ -140,7 +140,7 @@ print(args.task_type)
 if 'split' in args.task_type:
     if dataset in ['fashion','mnist','notmnist']:
         num_tasks = 5
-    elif dataset in ['not-notmnist','cifar']:
+    elif dataset in ['not-notmnist','cifar100']:
         num_tasks = 10
     elif dataset == 'quickdraw':
         num_tasks = 8
@@ -212,6 +212,7 @@ elif 'split' in args.task_type:
             conv = False
             hidden = []
             args.vcl_type = 'drs'
+            decay=(2000,0.9)
         else:
             conv =True
             hidden = [512,512]

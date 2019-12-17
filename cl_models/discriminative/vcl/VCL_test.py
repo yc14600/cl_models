@@ -212,7 +212,6 @@ elif 'split' in args.task_type:
             conv = False
             hidden = []
             args.vcl_type = 'drs'
-            decay=(2000,0.9)
         else:
             conv =True
             hidden = [512,512]

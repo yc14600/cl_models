@@ -92,7 +92,7 @@ parser.add_argument('-lam_reg','--lambda_reg',default=0.0001,type=float,help='la
 parser.add_argument('-wem','--WEM',default=False,type=str2bool,help='enable weighted EM in drs cl')
 parser.add_argument('-bit','--batch_iter',default=1,type=int,help='iterations on one batch')
 parser.add_argument('-ntp','--net_type',default='dense',type=str,help='network type, can be dense, conv, resnet18')
-
+parser.add_argument('-fxbt','--fixed_budget',default=True,type=str2bool,help='if budget of episodic memory is fixed or not')
 
 args = parser.parse_args()
 print(args)
@@ -349,7 +349,7 @@ elif args.vcl_type=='drs':
             conv=conv,dropout=dropout,vi_type=args.vi_type,initialization=initialization,ac_fn=ac_fn,n_samples=args.num_samples,\
             local_rpm=args.local_rpm,enable_kd_reg=args.kd_reg,enable_vcl_reg=args.kd_vcl_reg,B=args.B,eta=args.eta,K=args.K,\
             discriminant=args.discriminant,lambda_dis=args.lambda_disc,WEM=args.WEM,coreset_mode=args.coreset_mode,\
-            task_type=args.task_type,batch_iter=args.batch_iter,lambda_reg=args.lambda_reg,net_type=args.net_type)
+            task_type=args.task_type,batch_iter=args.batch_iter,lambda_reg=args.lambda_reg,net_type=args.net_type,fixed_budget=args.fixed_budget)
 
 else:
     raise TypeError('Wrong type of VCL')

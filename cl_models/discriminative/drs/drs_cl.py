@@ -32,7 +32,7 @@ class DRS_CL(VCL):
                     coreset_usage='regret',vi_type='KLqp_analytic',conv=False,dropout=None,initialization=None,\
                     ac_fn=tf.nn.relu,n_smaples=1,local_rpm=False,conv_net_shape=None,strides=None,pooling=False,\
                     B=3,eta=0.001,K=5,regularization=False,lambda_reg=0.0001,discriminant=False,lambda_dis=.001,\
-                    WEM=False,coreset_mode='offline',batch_iter=1,task_type='split',net_type='dense',*args,**kargs):
+                    WEM=False,coreset_mode='offline',batch_iter=1,task_type='split',net_type='dense',fixed_budget=False,*args,**kargs):
         assert(num_heads==1)
         #assert(B>1)
         self.B = B # training batch size
@@ -46,6 +46,7 @@ class DRS_CL(VCL):
         self.WEM = WEM # Weighted Episodic Memory
         self.batch_iter = batch_iter
         self.net_type = net_type
+        self.fixed_budget = fixed_budget # fixed memory budget or not
 
         print('DRS_CL: B {}, K {}, eta {}, dis {}, batch iter {}'.format(B,K,eta,discriminant,batch_iter))
         super(DRS_CL,self).__init__(net_shape,x_ph,y_ph,num_heads,batch_size,coreset_size,coreset_type,\
@@ -145,8 +146,7 @@ class DRS_CL(VCL):
         buffer_size = self.B
         cx, cy = x_batch,y_batch 
 
-        if self.coreset_mode == 'ring_buffer':
-
+        if self.coreset_mode == 'ring_buffer':            
             if self.task_type == 'split':
                 y_mask = np.sum(y_batch,axis=0) > 0
                 nc_batch = np.sum(y_mask)                
@@ -164,7 +164,7 @@ class DRS_CL(VCL):
                 cy = y_batch if cxy is None else np.vstack([cxy[1],y_batch])
                 self.core_sets[t] = (cx,cy)
                 
-            self.online_update_coresets(self.coreset_size)
+            self.online_update_coresets(self.coreset_size,self.fixed_budget,t)
           
             
         if t > 0:

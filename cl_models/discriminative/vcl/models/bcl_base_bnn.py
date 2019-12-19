@@ -201,43 +201,66 @@ class BCL_BNN(BCL_BASE_MODEL):
             print('coreset size',len(self.core_sets[0]))
         self.curr_buf = [[],[]]
     '''
-    def online_update_coresets(self,coreset_size):
+    def online_update_coresets(self,coreset_size,fixed_budget,t):
     
         if self.coreset_mode == 'ring_buffer':
-            num_cl = len(self.core_sets)
-            num_per_cls = int(coreset_size/num_cl)
-            clen = np.array([len(cx) for cx in self.core_sets.values()]) if self.task_type=='split' else np.array([len(cx[0]) for cx in self.core_sets.values()])
-            tot = np.sum(clen[clen<=num_per_cls])
-            num_mem = np.sum(clen>num_per_cls)
-            #print('tot',tot,'num mem',num_mem)
-            if num_mem > 0:
-                mem_size = coreset_size - tot
-                
-                
-                num_per_mem = int(mem_size/num_mem)
+            if fixed_budget:
+                num_cl = len(self.core_sets)
+                num_per_cls = int(coreset_size/num_cl)
+                clen = np.array([len(cx) for cx in self.core_sets.values()]) if self.task_type=='split' else np.array([len(cx[0]) for cx in self.core_sets.values()])
+                tot = np.sum(clen[clen<=num_per_cls])
+                num_mem = np.sum(clen>num_per_cls)
+                #print('tot',tot,'num mem',num_mem)
+                if num_mem > 0:
+                    mem_size = coreset_size - tot                
+                    num_per_mem = int(mem_size/num_mem)
 
-                residual = mem_size % num_mem
-                if residual > 0:
-                    clss = np.array(list(self.core_sets.keys()))[clen>num_per_cls]
-                    resd_clss = set(np.random.choice(clss,residual,replace=False))
-                #print('num per mem',num_per_mem,'residual',residual)
+                for i in self.core_sets.keys():
+                    cx = self.core_sets[i] if self.task_type=='split' else self.core_sets[i][0] 
+                    #print('c',len(cx))                             
+                    if num_per_cls < len(cx):
+                        tsize = min(len(cx),num_per_mem)
+                        cx = cx[-tsize:]
+                        if self.task_type == 'split':
+                            self.core_sets[i] = cx
+                        else:
+                            cy = self.core_sets[i][1][-tsize:]
+                            self.core_sets[i] = (cx,cy)
+            else:
+                if self.task_type == 'split':
+                    for i in self.core_sets.keys():
+                        cx = self.core_sets[i]  
+                        if coreset_size < len(cx):                                            
+                            cx = cx[-coreset_size:]
+                            self.core_sets[i] = cx
+                            #print('after online update',i,len(cx))
+                else:
+                    ## permuted task ##
+                    cx = self.core_sets[t][0]
+                    cy = self.core_sets[t][1]
+                    num_per_cls = int(coreset_size/cy.shape[1])
+                    num_cls = np.sum(cy,axis=0).astype(int)
+                    
+                    clss = num_cls > num_per_cls
+                    #print('clss',clss,clss.sum())
+                    tot = clss.sum()
+                    if tot > 0:
+                        clss = np.argsort(clss)[-tot:]
+                        #print('num cls',num_cls,clss)
+                        for c in clss:
+                            #print('check online update',c,num_cls[c],num_per_cls)
+                            cids = cy[:,c]==1
+                            rids = np.argsort(cids)[-num_cls[c]:-num_per_cls]
+                            cids = np.ones(len(cx))
+                            cids[rids] = 0
+                            cx = cx[cids.astype(bool)]
+                            #print('after update',c,len(cx))
+                            cy = cy[cids.astype(bool)]
+                        self.core_sets[t] = (cx,cy)
+                
 
-            for i in self.core_sets.keys():
-                cx = self.core_sets[i] if self.task_type=='split' else self.core_sets[i][0] 
-                #print('c',len(cx))                             
-                if num_per_cls < len(cx):
-                    tsize = min(len(cx),num_per_mem)
-                    #tsize = num_per_mem+1 if residual>0 and i in resd_clss else num_per_mem
-                    
-                    #print(i,'tsize', tsize,'c',len(cx),'num per mem',num_per_mem,'num per cl',num_per_cls)
-                    
-                    #cids = np.random.choice(len(cx),size=tsize,replace=False)
-                    cx = cx[-tsize:]
-                    if self.task_type == 'split':
-                        self.core_sets[i] = cx
-                    else:
-                        cy = self.core_sets[i][1][-tsize:]
-                        self.core_sets[i] = (cx,cy)
+
+
 
 
 

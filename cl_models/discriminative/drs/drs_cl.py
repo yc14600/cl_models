@@ -32,7 +32,7 @@ class DRS_CL(VCL):
                     coreset_usage='regret',vi_type='KLqp_analytic',conv=False,dropout=None,initialization=None,\
                     ac_fn=tf.nn.relu,n_smaples=1,local_rpm=False,conv_net_shape=None,strides=None,pooling=False,\
                     B=3,eta=0.001,K=5,regularization=False,lambda_reg=0.0001,discriminant=False,lambda_dis=.001,\
-                    WEM=False,coreset_mode='offline',batch_iter=1,task_type='split',net_type='dense',fixed_budget=False,*args,**kargs):
+                    WEM=False,coreset_mode='offline',batch_iter=1,task_type='split',net_type='dense',fixed_budget=True,*args,**kargs):
         assert(num_heads==1)
         #assert(B>1)
         self.B = B # training batch size

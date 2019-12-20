@@ -93,6 +93,9 @@ parser.add_argument('-wem','--WEM',default=False,type=str2bool,help='enable weig
 parser.add_argument('-bit','--batch_iter',default=1,type=int,help='iterations on one batch')
 parser.add_argument('-ntp','--net_type',default='dense',type=str,help='network type, can be dense, conv, resnet18')
 parser.add_argument('-fxbt','--fixed_budget',default=True,type=str2bool,help='if budget of episodic memory is fixed or not')
+parser.add_argument('-ptp','--pretrained_path',default='',type=str,help='path to pretrained resnet18 on cifar10')
+
+
 
 args = parser.parse_args()
 print(args)
@@ -206,7 +209,7 @@ elif 'cross_split' in args.task_type:
 
 
 elif 'split' in args.task_type:
-    if dataset == 'cifar10':
+    if 'cifar' in dataset:
         
         if args.net_type == 'resnet18':
             conv = False
@@ -215,31 +218,54 @@ elif 'split' in args.task_type:
         else:
             conv =True
             hidden = [512,512]
+        
+        if dataset  == 'cifar10':
 
-        (X_TRAIN, Y_TRAIN), (X_TEST, Y_TEST) = cifar10.load_data() 
-        Y_TRAIN,Y_TEST = Y_TRAIN.reshape(-1), Y_TEST.reshape(-1)
-        # standardize data
-        X_TRAIN,X_TEST = standardize_flatten(X_TRAIN,X_TEST,flatten=False)
-        print('data shape',X_TRAIN.shape)
-        num_tasks = 5
-        if num_heads > 1:
-            out_dim = 2
-        else:
-            out_dim = 10
+            (X_TRAIN, Y_TRAIN), (X_TEST, Y_TEST) = cifar10.load_data() 
+            Y_TRAIN,Y_TEST = Y_TRAIN.reshape(-1), Y_TEST.reshape(-1)
+            # standardize data
+            X_TRAIN,X_TEST = standardize_flatten(X_TRAIN,X_TEST,flatten=False)
+            print('data shape',X_TRAIN.shape)
+            num_tasks = 5
+            if num_heads > 1:
+                out_dim = 2
+            else:
+                out_dim = 10
 
-        #Y_TRAIN = one_hot_encoder(Y_TRAIN.reshape(-1),out_dim)
-        #Y_TEST = one_hot_encoder(Y_TEST.reshape(-1),out_dim)
-        cl_cmb = np.arange(10)
-        cl_k = 0
-        cl_n = 2
-        # first task use all cifar10 data
-        x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = gen_next_task_data(args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,train_size=args.train_size,test_size=args.test_size,\
-                                                                    cl_n=cl_n,cl_k=cl_k,cl_cmb=cl_cmb,out_dim=out_dim,num_heads=num_heads) #X_TRAIN,Y_TRAIN,X_TEST,Y_TEST
-        # load cifar 100
-        #(X_TRAIN, Y_TRAIN), (X_TEST, Y_TEST) = cifar100.load_data() 
-        #X_TRAIN,X_TEST = standardize_flatten(X_TRAIN,X_TEST,flatten=False)
+            #Y_TRAIN = one_hot_encoder(Y_TRAIN.reshape(-1),out_dim)
+            #Y_TEST = one_hot_encoder(Y_TEST.reshape(-1),out_dim)
+            cl_cmb = np.arange(10)
+            cl_k = 0
+            cl_n = 2
+            # first task use all cifar10 data
+            x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = gen_next_task_data(args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,train_size=args.train_size,test_size=args.test_size,\
+                                                                        cl_n=cl_n,cl_k=cl_k,cl_cmb=cl_cmb,out_dim=out_dim,num_heads=num_heads) #X_TRAIN,Y_TRAIN,X_TEST,Y_TEST
+            # load cifar 100
+            #(X_TRAIN, Y_TRAIN), (X_TEST, Y_TEST) = cifar100.load_data() 
+            #X_TRAIN,X_TEST = standardize_flatten(X_TRAIN,X_TEST,flatten=False)
 
-        #clss = cl_cmb[cl_k:cl_k+cl_n]
+            #clss = cl_cmb[cl_k:cl_k+cl_n]
+        elif dataset == 'cifar100':
+            (X_TRAIN, Y_TRAIN), (X_TEST, Y_TEST) = cifar100.load_data() 
+            Y_TRAIN,Y_TEST = Y_TRAIN.reshape(-1), Y_TEST.reshape(-1)
+            # standardize data
+            X_TRAIN,X_TEST = standardize_flatten(X_TRAIN,X_TEST,flatten=False)
+            print('data shape',X_TRAIN.shape)
+            num_tasks = 20
+            if num_heads > 1:
+                out_dim = 5
+            else:
+                out_dim = 100
+
+            cl_cmb = np.arange(100)
+            cl_k = 0
+            cl_n = 5
+            
+            x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = gen_next_task_data(args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,train_size=args.train_size,test_size=args.test_size,\
+                                                                        cl_n=cl_n,cl_k=cl_k,cl_cmb=cl_cmb,out_dim=out_dim,num_heads=num_heads) #X_TRAIN,Y_TRAIN,X_TEST,Y_TEST
+
+
+
     else:
         data = input_data.read_data_sets(DATA_DIR) 
         X_TRAIN = np.concatenate([data.train.images,data.validation.images],axis=0)

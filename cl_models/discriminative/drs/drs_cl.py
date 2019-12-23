@@ -88,6 +88,7 @@ class DRS_CL(VCL):
         
     
     def init_inference(self,learning_rate,decay=None,grad_type='adam',*args,**kargs):
+        print('decay',decay)
         self.config_optimizer(starter_learning_rate=learning_rate,decay=decay,grad_type=grad_type)
         self.config_inference(*args,**kargs)
 
@@ -126,7 +127,7 @@ class DRS_CL(VCL):
             yids = tf.matmul(y, tf.transpose(y))
             mask = tf.eye(self.B)
             #print('y',y,'yids',yids)
-            for h in H[:-1]:
+            for h in H[:]:
                 #h = H[0]
                 if len(h.shape) > 2:
                     h = tf.reshape(h,[self.B,-1])

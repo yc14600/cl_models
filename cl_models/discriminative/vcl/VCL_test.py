@@ -141,12 +141,14 @@ conv = args.conv
 print(args.task_type)
 
 if 'split' in args.task_type:
-    if dataset in ['fashion','mnist','notmnist']:
+    if dataset in ['fashion','mnist','notmnist','cifar10']:
         num_tasks = 5
-    elif dataset in ['not-notmnist','cifar100']:
+    elif dataset in ['not-notmnist']:
         num_tasks = 10
     elif dataset == 'quickdraw':
         num_tasks = 8
+    else:
+        num_tasks = args.num_tasks
 elif 'batch' in args.task_type:
     num_tasks = 1
 else:
@@ -226,7 +228,7 @@ elif 'split' in args.task_type:
             # standardize data
             X_TRAIN,X_TEST = standardize_flatten(X_TRAIN,X_TEST,flatten=False)
             print('data shape',X_TRAIN.shape)
-            num_tasks = 5
+            #num_tasks = 5
             if num_heads > 1:
                 out_dim = 2
             else:
@@ -251,9 +253,9 @@ elif 'split' in args.task_type:
             # standardize data
             X_TRAIN,X_TEST = standardize_flatten(X_TRAIN,X_TEST,flatten=False)
             print('data shape',X_TRAIN.shape)
-            num_tasks = 20
+           
             if num_heads > 1:
-                out_dim = 5
+                out_dim = int(100/num_tasks)
             else:
                 out_dim = 100
 

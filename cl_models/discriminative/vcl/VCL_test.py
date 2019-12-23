@@ -125,7 +125,7 @@ hidden = args.hidden #[256,256]
 scale = 1.#TRAIN_SIZE/batch_size#weights of likelihood
 shrink = 1. #shrink train_size, smaller gives larger weights of KL-term
 
-if args.decay is not None:  
+if len(args.decay) == 2:  
     decay = (int(args.decay[0]),args.decay[1])
 else:
     decay = None

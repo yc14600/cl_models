@@ -72,6 +72,7 @@ parser.add_argument('-gi','--ginit', default=3, type=int, help='power of global 
 parser.add_argument('-ns','--num_samples', default=1, type=int, help='number of parameter samples')
 parser.add_argument('-lrp','--local_rpm', default=False, type=str2bool, help='if use local reparameterzation')
 parser.add_argument('-lr','--learning_rate', default=0.001, type=float, help='learning rate')
+parser.add_argument('-dcy','--decay', default=[1000,0.9], type=str2flist, help='decay of learning rate')
 parser.add_argument('-af','--ac_fn', default='relu', type=str, help='activation function of hidden layers')
 parser.add_argument('-irt','--irt', default=False, type=str2bool, help='generate responses for IRT modelling')
 parser.add_argument('-tb','--tensorboard', default=False, type=str2bool, help='enable tensorboard')
@@ -124,8 +125,11 @@ hidden = args.hidden #[256,256]
 scale = 1.#TRAIN_SIZE/batch_size#weights of likelihood
 shrink = 1. #shrink train_size, smaller gives larger weights of KL-term
 
+if args.decay is not None:  
+    decay = (int(args.decay[0]),args.decay[1])
+else:
+    decay = None
 
-decay=(1000,0.9)
 
 
 share_type = 'isotropic'

@@ -261,7 +261,7 @@ elif 'split' in args.task_type:
 
             cl_cmb = np.arange(100)
             cl_k = 0
-            cl_n = 5
+            cl_n = int(100/num_tasks)
             
             x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = gen_next_task_data(args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,train_size=args.train_size,test_size=args.test_size,\
                                                                         cl_n=cl_n,cl_k=cl_k,cl_cmb=cl_cmb,out_dim=out_dim,num_heads=num_heads) #X_TRAIN,Y_TRAIN,X_TEST,Y_TEST

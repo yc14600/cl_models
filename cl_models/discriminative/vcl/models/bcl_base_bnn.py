@@ -186,21 +186,30 @@ class BCL_BNN(BCL_BASE_MODEL):
 
         return x_train_task,y_train_task
 
-    '''
-    def online_update_coresets(self,t):
 
-        if self.coreset_mode == 'ring_buffer':
-            num_per_task = int(self.coreset_size/(t+1))
-            print('t',t,'num per task',num_per_task)
-            for i in range(t):
-                cx, cy = self.core_sets[0][i], self.core_sets[1][i]
-                if num_per_task < len(cx):
-                    cids = np.random.choice(len(cx),size=num_per_task,replace=False)
-                    self.core_sets[0][i] = cx[cids]
-                    self.core_sets[1][i] = cy[cids]
-            print('coreset size',len(self.core_sets[0]))
-        self.curr_buf = [[],[]]
-    '''
+    def update_ring_buffer(self,t,x_batch,y_batch):
+           
+        if self.task_type == 'split':
+            y_mask = np.sum(y_batch,axis=0) > 0
+            nc_batch = np.sum(y_mask)                
+            cls_batch = np.argsort(y_mask)[-nc_batch:]
+            #print('cls batch',cls_batch,'nc mem',nc_mem)
+
+            for c in cls_batch:
+                cx = self.core_sets.get(c,None)
+                self.core_sets[c] = x_batch[y_batch[:,c]==1] if cx is None else np.vstack([cx,x_batch[y_batch[:,c]==1]])
+            
+        
+        else:
+            cxy = self.core_sets.get(t,None)
+            cx = x_batch if cxy is None else np.vstack([cxy[0],x_batch])
+            cy = y_batch if cxy is None else np.vstack([cxy[1],y_batch])
+            self.core_sets[t] = (cx,cy)
+            
+        self.online_update_coresets(self.coreset_size,self.fixed_budget,t)
+
+        return
+
     def online_update_coresets(self,coreset_size,fixed_budget,t):
     
         if self.coreset_mode == 'ring_buffer':

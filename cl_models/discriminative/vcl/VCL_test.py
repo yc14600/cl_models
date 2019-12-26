@@ -40,6 +40,7 @@ from models.vcl_model import VCL
 from models.vcl_kd import VCL_KD
 from models.stein_cl import Stein_CL
 from cl_models.discriminative.drs.drs_cl import DRS_CL
+from cl_models.discriminative.drs.agem import AGEM
 from edward.models import Normal,MultivariateNormalTriL
 from tensorflow.examples.tutorials.mnist import input_data
 from tensorflow.python.keras.datasets import cifar10,cifar100
@@ -90,10 +91,11 @@ parser.add_argument('-eta','--eta',default=0.001,type=float,help='learning rate 
 parser.add_argument('-disc','--discriminant',default=False,type=str2bool,help='enable discriminant in drs cl')
 parser.add_argument('-lam_dis','--lambda_disc',default=0.001,type=float,help='lambda discriminant')
 parser.add_argument('-lam_reg','--lambda_reg',default=0.0001,type=float,help='lambda regularization')
-parser.add_argument('-wem','--WEM',default=False,type=str2bool,help='enable weighted EM in drs cl')
+parser.add_argument('-er','--ER',default=False,type=str2bool,help='test experience replay')
 parser.add_argument('-bit','--batch_iter',default=1,type=int,help='iterations on one batch')
 parser.add_argument('-ntp','--net_type',default='dense',type=str,help='network type, can be dense, conv, resnet18')
 parser.add_argument('-fxbt','--fixed_budget',default=True,type=str2bool,help='if budget of episodic memory is fixed or not')
+parser.add_argument('-mbs','--mem_bsize',default=256,type=int,help='memory batch size used in AGEM')
 parser.add_argument('-ptp','--pretrained_path',default='',type=str,help='path to pretrained resnet18 on cifar10')
 
 
@@ -380,11 +382,18 @@ elif args.vcl_type=='drs':
     Model = DRS_CL(net_shape,x_ph,y_ph,num_heads,batch_size,args.coreset_size,args.coreset_type,args.coreset_usage,\
             conv=conv,dropout=dropout,vi_type=args.vi_type,initialization=initialization,ac_fn=ac_fn,n_samples=args.num_samples,\
             local_rpm=args.local_rpm,enable_kd_reg=args.kd_reg,enable_vcl_reg=args.kd_vcl_reg,B=args.B,eta=args.eta,K=args.K,\
-            discriminant=args.discriminant,lambda_dis=args.lambda_disc,WEM=args.WEM,coreset_mode=args.coreset_mode,\
+            discriminant=args.discriminant,lambda_dis=args.lambda_disc,ER=args.ER,coreset_mode=args.coreset_mode,\
             task_type=args.task_type,batch_iter=args.batch_iter,lambda_reg=args.lambda_reg,net_type=args.net_type,fixed_budget=args.fixed_budget)
 
+elif args.vcl_type=='agem':
+    Model = AGEM(net_shape,x_ph,y_ph,num_heads,batch_size,args.coreset_size,args.coreset_type,args.coreset_usage,\
+            conv=conv,dropout=dropout,vi_type=args.vi_type,initialization=initialization,ac_fn=ac_fn,n_samples=args.num_samples,\
+            local_rpm=args.local_rpm,enable_kd_reg=args.kd_reg,enable_vcl_reg=args.kd_vcl_reg,B=args.B,eta=args.eta,K=args.K,\
+            coreset_mode=args.coreset_mode,task_type=args.task_type,batch_iter=args.batch_iter,lambda_reg=args.lambda_reg,\
+            net_type=args.net_type,fixed_budget=args.fixed_budget,mem_batch_size=args.mem_bsize)
+
 else:
-    raise TypeError('Wrong type of VCL')
+    raise TypeError('Wrong type of model')
 
 
 Model.init_inference(learning_rate=args.learning_rate,decay=decay,train_size=TRAIN_SIZE,grad_type=args.grad_type,scale=scale)

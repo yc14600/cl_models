@@ -32,7 +32,8 @@ class DRS_CL(VCL):
                     coreset_usage='regret',vi_type='KLqp_analytic',conv=False,dropout=None,initialization=None,\
                     ac_fn=tf.nn.relu,n_smaples=1,local_rpm=False,conv_net_shape=None,strides=None,pooling=False,\
                     B=3,eta=0.001,K=5,regularization=False,lambda_reg=0.0001,discriminant=False,lambda_dis=.001,\
-                    WEM=False,coreset_mode='offline',batch_iter=1,task_type='split',net_type='dense',fixed_budget=True,*args,**kargs):
+                    coreset_mode='online',batch_iter=1,task_type='split',net_type='dense',fixed_budget=True,ER=False,*args,**kargs):
+                    
         assert(num_heads==1)
         #assert(B>1)
         self.B = B # training batch size
@@ -43,12 +44,12 @@ class DRS_CL(VCL):
         self.lambda_reg = lambda_reg # multiplier of regularization
         self.discriminant =discriminant
         self.lambda_dis = lambda_dis
-        self.WEM = WEM # Weighted Episodic Memory
+        self.ER = ER
         self.batch_iter = batch_iter
         self.net_type = net_type
         self.fixed_budget = fixed_budget # fixed memory budget or not
 
-        print('DRS_CL: B {}, K {}, eta {}, dis {}, batch iter {}'.format(B,K,eta,discriminant,batch_iter))
+        print('DRS_CL: B {}, ER {}, dis {}, batch iter {}'.format(B,ER,discriminant,batch_iter))
         super(DRS_CL,self).__init__(net_shape,x_ph,y_ph,num_heads,batch_size,coreset_size,coreset_type,\
                     coreset_usage,vi_type,conv,dropout,initialization,ac_fn,n_smaples,local_rpm,conv_net_shape,\
                     strides,pooling,coreset_mode=coreset_mode,B=B,task_type=task_type,*args,**kargs)
@@ -105,7 +106,7 @@ class DRS_CL(VCL):
 
     def config_inference(self,*args,**kargs):
 
-        self.inference = MAP_Inference(var_list=self.vars,grads=self.grads,optimizer=self.task_optimizer,ll=self.ll,kl=self.kl)
+        self.inference = MLE_Inference(var_list=self.vars,grads=self.grads,optimizer=self.task_optimizer,ll=self.ll,kl=self.kl)
 
     
     
@@ -145,28 +146,9 @@ class DRS_CL(VCL):
 
         x_batch, y_batch = feed_dict[self.x_ph], feed_dict[self.y_ph]
         buffer_size = self.B 
-        cx, cy = x_batch,y_batch 
-
-        if self.coreset_mode == 'ring_buffer':            
-            if self.task_type == 'split':
-                y_mask = np.sum(y_batch,axis=0) > 0
-                nc_batch = np.sum(y_mask)                
-                cls_batch = np.argsort(y_mask)[-nc_batch:]
-                #print('cls batch',cls_batch,'nc mem',nc_mem)
-
-                for c in cls_batch:
-                    cx = self.core_sets.get(c,None)
-                    self.core_sets[c] = x_batch[y_batch[:,c]==1] if cx is None else np.vstack([cx,x_batch[y_batch[:,c]==1]])
-                
-            
-            else:
-                cxy = self.core_sets.get(t,None)
-                cx = x_batch if cxy is None else np.vstack([cxy[0],x_batch])
-                cy = y_batch if cxy is None else np.vstack([cxy[1],y_batch])
-                self.core_sets[t] = (cx,cy)
-                
-            self.online_update_coresets(self.coreset_size,self.fixed_budget,t)
-          
+        
+        if self.coreset_mode == 'ring_buffer':  
+            self.update_ring_buffer(t,x_batch,y_batch)
             
         if t > 0:
             
@@ -179,39 +161,36 @@ class DRS_CL(VCL):
 
             coreset_x, coreset_y = [], []
             #print('num cl',per_cl_size)
-            if self.WEM:
+            if self.ER:
                 if self.task_type == 'split':
-                    #print('coreset',self.core_sets.keys())
-                    tmp_d = [(x, one_hot_encoder(np.ones(x.shape[0])*y,H=self.net_shape[-1])) for y,x in self.core_sets.items()]
-                    tmp_x = np.vstack([d[0] for d in tmp_d])
-                    tmp_y = np.vstack([d[1] for d in tmp_d])
-                    loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.H[-1],labels=self.y_ph),axis=1)
-                    loss = sess.run(loss,feed_dict={self.x_ph:tmp_x,self.y_ph:tmp_y})
+                    clss_batch = np.sum(y_batch,axis=0) > 0
+                    clss_batch = np.argsort(clss_batch)[-np.sum(clss_batch):]
+                    #print('clss batch',clss_batch) 
+                    clss_mem = set(self.core_sets.keys()) - set(clss_batch)
+                    #print('clss mem',clss_mem)
+                    mem_x = np.vstack([self.core_sets[c] for c in clss_mem])
+                    #mem_y = [self.core_sets[c].shape[0] for c in clss_mem]
+                    mem_y = []
+                    for c in clss_mem:
+                        tmp = np.zeros([self.core_sets[c].shape[0],self.net_shape[-1]])
+                        tmp[:,c] = 1
+                        mem_y.append(tmp)
+                    mem_y = np.vstack(mem_y)
 
-                    ptr = 0
-
-                    for i, cx in self.core_sets.items(): 
-                        tsize = per_cl_size+1 if rd>0 and i in clss else per_cl_size                      
-                        p = softmax(loss[ptr:ptr+len(cx)])
-                        ids = np.random.choice(len(cx),size=tsize,p=p)
-                        ptr += len(cx)
-
-                        tmp_y = np.zeros([tsize,self.net_shape[-1]])
-                        tmp_y[:,i] = 1
-                        tmp_x = cx[ids]
-
-                        coreset_x.append(tmp_x)
-                        coreset_y.append(tmp_y)
                 else:
-                    tmp_d = [(t,x) for t,x in self.core_sets.items()]
-                    tmp_x = np.vstack([d[1][0] for d in tmp_d])
-                    tmp_y = np.vstack([d[1][1] for d in tmp_d])
-                    loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.H[-1],labels=self.y_ph),axis=1)
-                    loss = sess.run(loss,feed_dict={self.x_ph:tmp_x,self.y_ph:tmp_y})
+                    mem_x,mem_y = [],[]
+                    for c in self.core_sets.keys():
+                        if c < t:
+                            mem_x.append(self.core_sets[c][0])
+                            mem_y.append(self.core_sets[c][1])
+                    mem_x = np.vstack(mem_x)
+                    mem_y = np.vstack(mem_y)
 
-                    ids = np.argsort(loss)[-buffer_size:]#np.random.choice(len(tmp_x),size=buffer_size,p=softmax(loss))
-                    coreset_x = tmp_x[ids]
-                    coreset_y = tmp_y[ids]
+                mem_x,mem_y = shuffle_data(mem_x,mem_y)
+                bids = np.random.choice(mem_x.shape[0],size=self.batch_size)
+                coreset_x = np.vstack([x_batch,mem_x[bids]])
+                coreset_y = np.vstack([y_batch,mem_y[bids]])
+
 
             else:
                 if self.task_type == 'split':
@@ -236,6 +215,7 @@ class DRS_CL(VCL):
                     
             if isinstance(coreset_x,list):
                 coreset_x, coreset_y = np.vstack(coreset_x), np.vstack(coreset_y)#np.vstack([*coreset_x,cx]), np.vstack([*coreset_y,cy])
+            
             feed_dict.update({self.x_ph:coreset_x,self.y_ph:coreset_y})
                 
         ### empty memory ###              
@@ -251,12 +231,14 @@ class DRS_CL(VCL):
                 cx = np.vstack(cx)
                 cy = np.vstack(cy)
                 cx, cy = shuffle_data(cx,cy)
+            else:
+                cx, cy = x_batch,y_batch 
 
             bids = np.random.choice(len(cx),size=buffer_size) 
             feed_dict.update({self.x_ph:cx[bids],self.y_ph:cy[bids]})
 
         #print('feed dict',feed_dict[self.x_ph].shape)
-        self.inference.update(sess=sess,K=self.K,feed_dict=feed_dict)
+        self.inference.update(sess=sess,feed_dict=feed_dict)
 
         ## todo: update err
         return err
@@ -328,7 +310,7 @@ class DRS_CL(VCL):
         #return super(Stein_CL,self).test_all_tasks(t,test_sets,sess=sess,epoch=epoch,saver=saver,file_path=file_path,bayes=False,bayes_output=False)
 
 
-class MAP_Inference:
+class MLE_Inference:
     def __init__(self,var_list,grads,optimizer=None,ll=0.,kl=0.,*args,**kargs):
         self.var_list = var_list
         self.grads = grads

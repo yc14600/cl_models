@@ -67,7 +67,7 @@ parser.add_argument('-trsz','--train_size', default=50000, type=int, help='size 
 parser.add_argument('-tesz','--test_size', default=10000, type=int, help='size of testing set')
 parser.add_argument('-nts','--num_tasks', default=10, type=int, help='number of tasks')
 parser.add_argument('-nli','--local_iter', default=50, type=int, help='number of local iterations for stein coreset')
-parser.add_argument('-mh','--multihead', default=True, type=str2bool, help='multihead model')
+parser.add_argument('-mh','--multihead', default=False, type=str2bool, help='multihead model')
 parser.add_argument('-svp','--save_parm', default=False, type=str2bool, help='if save parameters')
 parser.add_argument('-gi','--ginit', default=3, type=int, help='power of global initialization of variance, 3 -> e-3')
 parser.add_argument('-ns','--num_samples', default=1, type=int, help='number of parameter samples')
@@ -90,7 +90,7 @@ parser.add_argument('-K','--K',default=10,type=int,help='every K iters update sa
 parser.add_argument('-eta','--eta',default=0.001,type=float,help='learning rate of meta Stein gradients')
 parser.add_argument('-disc','--discriminant',default=False,type=str2bool,help='enable discriminant in drs cl')
 parser.add_argument('-lam_dis','--lambda_disc',default=0.001,type=float,help='lambda discriminant')
-parser.add_argument('-lam_reg','--lambda_reg',default=0.0001,type=float,help='lambda regularization')
+parser.add_argument('-lam_reg','--lambda_reg',default=0.,type=float,help='lambda regularization')
 parser.add_argument('-er','--ER',default=False,type=str2bool,help='test experience replay')
 parser.add_argument('-bit','--batch_iter',default=1,type=int,help='iterations on one batch')
 parser.add_argument('-ntp','--net_type',default='dense',type=str,help='network type, can be dense, conv, resnet18')
@@ -307,7 +307,7 @@ if not os.path.exists(result_path):
     os.mkdir(result_path)
 head = 'multi' if args.multihead else 'single'
 file_name = dataset+'_'+args.vi_type+'_tsize'+str(TRAIN_SIZE)+'_cset'+str(args.coreset_size)+args.coreset_type+'_'+args.coreset_usage+'_nsample'+str(args.num_samples)+'_bsize'+str(batch_size)+'_init'+str(int(args.ginit))\
-            +'_e'+str(args.epoch)+'_lit'+str(args.local_iter)+'_fxb'+str(args.fixed_budget)+'_'+args.task_type+'_disc'+str(args.discriminant)+'_'+args.grad_type+'_'+head+'_'+args.model_type+'_'+args.vcl_type+'_sd'+str(seed)
+            +'_e'+str(args.epoch)+'_lit'+str(args.local_iter)+'_fxb'+str(args.fixed_budget)+'_'+args.task_type+'_disc'+str(args.discriminant)+'_ER'+str(args.ER)+'_'+args.grad_type+'_'+head+'_'+args.model_type+'_'+args.vcl_type+'_sd'+str(seed)
 
 file_path = os.path.join(result_path,file_name)
 file_path = config_result_path(file_path)
@@ -381,14 +381,14 @@ elif args.vcl_type=='stein':
 elif args.vcl_type=='drs':
     Model = DRS_CL(net_shape,x_ph,y_ph,num_heads,batch_size,args.coreset_size,args.coreset_type,args.coreset_usage,\
             conv=conv,dropout=dropout,vi_type=args.vi_type,initialization=initialization,ac_fn=ac_fn,n_samples=args.num_samples,\
-            local_rpm=args.local_rpm,enable_kd_reg=args.kd_reg,enable_vcl_reg=args.kd_vcl_reg,B=args.B,eta=args.eta,K=args.K,\
+            local_rpm=args.local_rpm,enable_kd_reg=args.kd_reg,enable_vcl_reg=args.kd_vcl_reg,B=args.B,\
             discriminant=args.discriminant,lambda_dis=args.lambda_disc,ER=args.ER,coreset_mode=args.coreset_mode,\
             task_type=args.task_type,batch_iter=args.batch_iter,lambda_reg=args.lambda_reg,net_type=args.net_type,fixed_budget=args.fixed_budget)
 
 elif args.vcl_type=='agem':
     Model = AGEM(net_shape,x_ph,y_ph,num_heads,batch_size,args.coreset_size,args.coreset_type,args.coreset_usage,\
             conv=conv,dropout=dropout,vi_type=args.vi_type,initialization=initialization,ac_fn=ac_fn,n_samples=args.num_samples,\
-            local_rpm=args.local_rpm,enable_kd_reg=args.kd_reg,enable_vcl_reg=args.kd_vcl_reg,B=args.B,eta=args.eta,K=args.K,\
+            local_rpm=args.local_rpm,enable_kd_reg=args.kd_reg,enable_vcl_reg=args.kd_vcl_reg,B=args.B,\
             coreset_mode=args.coreset_mode,task_type=args.task_type,batch_iter=args.batch_iter,lambda_reg=args.lambda_reg,\
             net_type=args.net_type,fixed_budget=args.fixed_budget,mem_batch_size=args.mem_bsize)
 

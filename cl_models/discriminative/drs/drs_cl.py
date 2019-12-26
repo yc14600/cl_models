@@ -126,7 +126,8 @@ class DRS_CL(VCL):
             yids = tf.matmul(y, tf.transpose(y))
             mask = tf.eye(self.B)
             #print('y',y,'yids',yids)
-            for h in H[:]:
+            h_list = H if self.task_type == 'split' else H[:-1]
+            for h in h_list:
                 #h = H[0]
                 if len(h.shape) > 2:
                     h = tf.reshape(h,[self.B,-1])

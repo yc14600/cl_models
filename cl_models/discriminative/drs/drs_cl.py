@@ -146,19 +146,12 @@ class DRS_CL(VCL):
         assert(self.coreset_size > 0)
 
         x_batch, y_batch = feed_dict[self.x_ph], feed_dict[self.y_ph]
-        buffer_size = self.B 
+        buffer_size = self.batch_size*2 if self.ER else self.B 
         
         if self.coreset_mode == 'ring_buffer':  
             self.update_ring_buffer(t,x_batch,y_batch)
             
         if t > 0:
-            
-            num_cl = len(self.core_sets)
-            per_cl_size = int(buffer_size/num_cl)  
-            rd = buffer_size % num_cl   
-            clss = set(np.random.choice(list(self.core_sets.keys()),size=rd,replace=False))  
-
-            #print('num cl',num_cl,'per cl size',per_cl_size,'rd',rd,'clss',clss)    
 
             coreset_x, coreset_y = [], []
             #print('num cl',per_cl_size)
@@ -194,6 +187,10 @@ class DRS_CL(VCL):
 
 
             else:
+                num_cl = len(self.core_sets)
+                per_cl_size = int(buffer_size/num_cl)  
+                rd = buffer_size % num_cl   
+                clss = set(np.random.choice(list(self.core_sets.keys()),size=rd,replace=False))  
                 if self.task_type == 'split':
                     for i, cx in self.core_sets.items(): 
                         tsize = per_cl_size+1 if rd>0 and i in clss else per_cl_size                      

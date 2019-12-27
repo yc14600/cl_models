@@ -125,7 +125,7 @@ class DRS_CL(VCL):
         #print('config loss: discriminant {}'.format(discriminant))
         if discriminant:
             yids = tf.matmul(y, tf.transpose(y))
-            N = self.batch_size*2 if self.ER else self.B
+            N = self.B
             mask = tf.eye(N) 
             #print('y',y,'yids',yids)
             h_list = H if self.task_type == 'split' else H[:-1]
@@ -146,7 +146,7 @@ class DRS_CL(VCL):
         assert(self.coreset_size > 0)
 
         x_batch, y_batch = feed_dict[self.x_ph], feed_dict[self.y_ph]
-        buffer_size = self.batch_size*2 if self.ER else self.B 
+        buffer_size = self.B 
         
         if self.coreset_mode == 'ring_buffer':  
             self.update_ring_buffer(t,x_batch,y_batch)
@@ -163,39 +163,49 @@ class DRS_CL(VCL):
                     #print('clss batch',clss_batch) 
                     clss_mem = set(self.core_sets.keys()) - set(clss_batch)
                     #print('clss mem',clss_mem)
+                    cx = np.vstack([self.core_sets[c] for c in clss_batch])
                     mem_x = np.vstack([self.core_sets[c] for c in clss_mem])
                     #mem_y = [self.core_sets[c].shape[0] for c in clss_mem]
-                    mem_y = []
+                    mem_y,cy = [],[]
                     for c in clss_mem:
                         tmp = np.zeros([self.core_sets[c].shape[0],self.net_shape[-1]])
                         tmp[:,c] = 1
                         mem_y.append(tmp)
                     mem_y = np.vstack(mem_y)
+                    for c in clss_batch:
+                        tmp = np.zeros([self.core_sets[c].shape[0],self.net_shape[-1]])
+                        tmp[:,c] = 1
+                        cy.append(tmp)
+                    cy = np.vstack(cy)
 
                 else:
-                    mem_x,mem_y = [],[]
+                    mem_x,mem_y,cx,cy = [],[],[],[]
                     for c in self.core_sets.keys():
                         if c < t:
                             mem_x.append(self.core_sets[c][0])
                             mem_y.append(self.core_sets[c][1])
+                        else:
+                            cx.append(self.core_sets[c][0])
+                            cy.append(self.core_sets[c][1])
                     mem_x = np.vstack(mem_x)
                     mem_y = np.vstack(mem_y)
+                    cx = np.vstack(cx)
+                    cy = np.vstack(cy)
 
-                mem_x,mem_y = shuffle_data(mem_x,mem_y)
-                bids = np.random.choice(mem_x.shape[0],size=self.batch_size)
-                coreset_x = np.vstack([x_batch,mem_x[bids]])
-                coreset_y = np.vstack([y_batch,mem_y[bids]])
+                #mem_x,mem_y = shuffle_data(mem_x,mem_y)
+                m_N = int(buffer_size/2)
+                c_N = buffer_size-m_N
+                mids = np.random.choice(mem_x.shape[0],size=m_N)
+                cids = np.random.choice(cx.shape[0],size=c_N)
+                coreset_x = np.vstack([cx[cids],mem_x[mids]])
+                coreset_y = np.vstack([cy[cids],mem_y[mids]])
 
 
             else:
                 num_cl = len(self.core_sets)
                 per_cl_size = int(buffer_size/num_cl)  
                 rd = buffer_size % num_cl   
-                if per_cl_size>0:
-                    clss = np.random.choice(list(self.core_sets.keys()),size=rd,replace=False) 
-                else:
-                    clss = np.random.choice(list(set(self.core_sets.keys())-set(clss_batch)),size=rd-len(clss_batch),replace=False)
-                    clss = set(clss)|set(clss_batch)
+                clss = np.random.choice(list(self.core_sets.keys()),size=rd,replace=False) 
                 if self.task_type == 'split':
                     for i, cx in self.core_sets.items(): 
                         tsize = per_cl_size+1 if rd>0 and i in clss else per_cl_size                      

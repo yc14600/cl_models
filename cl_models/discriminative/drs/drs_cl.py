@@ -154,11 +154,12 @@ class DRS_CL(VCL):
         if t > 0:
 
             coreset_x, coreset_y = [], []
+            clss_batch = np.sum(y_batch,axis=0) > 0
+            clss_batch = np.argsort(clss_batch)[-np.sum(clss_batch):]
             #print('num cl',per_cl_size)
             if self.ER:
                 if self.task_type == 'split':
-                    clss_batch = np.sum(y_batch,axis=0) > 0
-                    clss_batch = np.argsort(clss_batch)[-np.sum(clss_batch):]
+                    
                     #print('clss batch',clss_batch) 
                     clss_mem = set(self.core_sets.keys()) - set(clss_batch)
                     #print('clss mem',clss_mem)
@@ -190,7 +191,11 @@ class DRS_CL(VCL):
                 num_cl = len(self.core_sets)
                 per_cl_size = int(buffer_size/num_cl)  
                 rd = buffer_size % num_cl   
-                clss = set(np.random.choice(list(self.core_sets.keys()),size=rd,replace=False))  
+                if per_cl_size>0:
+                    clss = np.random.choice(list(self.core_sets.keys()),size=rd,replace=False) 
+                else:
+                    clss = np.random.choice(list(set(self.core_sets.keys())-set(clss_batch)),size=rd-len(clss_batch),replace=False)
+                    clss = set(clss)|set(clss_batch)
                 if self.task_type == 'split':
                     for i, cx in self.core_sets.items(): 
                         tsize = per_cl_size+1 if rd>0 and i in clss else per_cl_size                      

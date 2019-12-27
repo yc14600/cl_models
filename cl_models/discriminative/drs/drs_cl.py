@@ -125,13 +125,14 @@ class DRS_CL(VCL):
         #print('config loss: discriminant {}'.format(discriminant))
         if discriminant:
             yids = tf.matmul(y, tf.transpose(y))
-            mask = tf.eye(self.batch_size*2) if self.ER else tf.eye(self.B)
+            N = self.batch_size*2 if self.ER else self.B
+            mask = tf.eye(N) 
             #print('y',y,'yids',yids)
             h_list = H if self.task_type == 'split' else H[:-1]
             for h in h_list:
                 #h = H[0]
                 if len(h.shape) > 2:
-                    h = tf.reshape(h,[self.B,-1])
+                    h = tf.reshape(h,[N,-1])
                 
                 sim = tf.matmul(h,tf.transpose(h))
                 dis += 0.5*tf.reduce_mean(sim*(1.-yids)-0.5*sim*(mask-yids))

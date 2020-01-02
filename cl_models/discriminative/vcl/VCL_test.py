@@ -222,7 +222,8 @@ elif 'split' in args.task_type:
         if args.net_type == 'resnet18':
             conv = False
             hidden = []
-            args.vcl_type = 'drs'
+            #args.vcl_type = 'drs'
+            assert(args.vcl_type=='drs' or args.vcl_type=='agem')
         else:
             conv =True
             hidden = [512,512]

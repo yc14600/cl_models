@@ -88,6 +88,8 @@ class AGEM(DRS_CL):
             mem_x,mem_y = shuffle_data(mem_x,mem_y)
             bids = np.random.choice(mem_x.shape[0],size=self.mem_batch_size)
             ref_feed_dict = {self.x_ph:mem_x[bids],self.y_ph:mem_y[bids]}
+            if self.training is not None:
+                ref_feed_dict.update({self.training:False})
             sess.run(self.inference.store_ref_grads,ref_feed_dict)
 
         self.inference.update(t=t,sess=sess,feed_dict=feed_dict)

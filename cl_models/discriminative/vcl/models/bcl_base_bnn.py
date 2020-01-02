@@ -214,27 +214,20 @@ class BCL_BNN(BCL_BASE_MODEL):
     
         if self.coreset_mode == 'ring_buffer':
             if fixed_budget:
-                num_cl = len(self.core_sets)
-                num_per_cls = int(coreset_size/num_cl)
-                clen = np.array([len(cx) for cx in self.core_sets.values()]) if self.task_type=='split' else np.array([len(cx[0]) for cx in self.core_sets.values()])
-                tot = np.sum(clen[clen<=num_per_cls])
-                num_mem = np.sum(clen>num_per_cls)
-                #print('tot',tot,'num mem',num_mem)
-                if num_mem > 0:
-                    mem_size = coreset_size - tot                
-                    num_per_mem = int(mem_size/num_mem)
-
-                for i in self.core_sets.keys():
-                    cx = self.core_sets[i] if self.task_type=='split' else self.core_sets[i][0] 
-                    #print('c',len(cx))                             
-                    if num_per_cls < len(cx):
-                        tsize = min(len(cx),num_per_mem)
-                        cx = cx[-tsize:]
-                        if self.task_type == 'split':
-                            self.core_sets[i] = cx
-                        else:
-                            cy = self.core_sets[i][1][-tsize:]
-                            self.core_sets[i] = (cx,cy)
+                clen = [(c,len(cx)) for c,cx in self.core_sets.items()] if self.task_type=='split' else [(c,len(cx[0])) for c,cx in self.core_sets.items()]
+                lens = [it[1] for it in clen]
+                R = np.sum(lens) - coreset_size
+                while R > 0:
+                    c = clen[np.argmax(lens)][0]
+                    if self.task_type == 'split':
+                        self.core_sets[c] = self.core_sets[c][1:]
+                    else:
+                        self.core_sets[c] = (self.core_sets[c][0][1:],self.core_sets[c][1][1:])
+                    R -= 1
+                    clen = [(c,len(cx)) for c,cx in self.core_sets.items()] if self.task_type=='split' else [(c,len(cx[0])) for c,cx in self.core_sets.items()]
+                    lens = [it[1] for it in clen]
+                #print('{} samples in mem'.format(np.sum(lens)))
+                
             else:
                 if self.task_type == 'split':
                     for i in self.core_sets.keys():

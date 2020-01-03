@@ -290,9 +290,7 @@ class DRS_CL(VCL):
                 if self.discriminant:
                     ll,kl,dis = sess.run([self.ll,self.kl,self.dis],feed_dict=feed_dict)
                     print('epoch',e+1,'ll',ll,'kl',kl,'dis',dis)
-                else:
-                    ll,kl = sess.run([self.ll,self.kl],feed_dict=feed_dict)
-                    print('epoch',e+1,'ll',ll,'kl',kl)
+
         #print('curr buf',self.curr_buf[0].shape)
         return
 

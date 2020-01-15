@@ -19,6 +19,7 @@ import six
 import importlib
 import os
 import sys
+import time
 
 import tensorflow as tf
 import edward as ed
@@ -289,7 +290,7 @@ elif 'split' in args.task_type:
         else:
             out_dim = 2 * num_tasks
 
-        cl_cmb = np.arange(10)
+        cl_cmb = np.arange(10) #[7,9,4,6,3,7,1,0,2,9]#
         cl_k = 0
         cl_n = 2
         
@@ -336,7 +337,7 @@ elif conv:
     x_ph = tf.placeholder(dtype=tf.float32,shape=[None,*x_train_task.shape[1:]])
     in_dim = None
     dropout = 0.5
-    if dataset == 'cifar':
+    if 'cifar' in dataset:
         conv_net_shape = [[3,3,3,32],[3,3,32,32],[3,3,32,64],[3,3,64,64]]
         strides = [[1,2,2,1],[1,2,2,1],[1,1,1,1],[1,1,1,1]]
         hidden = [512,256]
@@ -452,8 +453,10 @@ avg_accs ,acc_record, probs_record, task_dsts,task_sims,t2m_sims = [], [], [], [
 pre_parms = {}
 saver = tf.train.Saver()
 tf.global_variables_initializer().run()
-print('num tasks',num_tasks)
-for t in range(num_tasks):
+print('num tasks',args.num_tasks)
+
+time_count = 0.
+for t in range(args.num_tasks):
     # get test data
     test_sets.append((x_test_task,y_test_task))
 
@@ -503,14 +506,16 @@ for t in range(num_tasks):
         '''
     #if args.task_dst and args.coreset_type=='stein':
     #    px = sess.run(Model.core_sets[0][-1])
-
+    start = time.time()
 
     if args.tensorboard:
         Model.train_task(sess,t,x_train_task,y_train_task,args.epoch,args.print_epoch,args.local_iter,\
                         tfb_merged=merged,tfb_writer=train_writer,tfb_avg_losses=[avg_err,avg_kl,avg_ll])
     else:
         Model.train_task(sess,t,x_train_task,y_train_task,args.epoch,args.print_epoch,args.local_iter)
-
+    end = time.time()
+    time_count += end-start
+    print('passed time',time_count)
     if args.save_parm:
         Model.save_parm(t,file_path,sess)
     
@@ -526,10 +531,12 @@ for t in range(num_tasks):
         cx,cy = shuffle_data(cx,cy)
         cx,cy = cx[:min(len(cx),200)],cy[:min(len(cy),200)]
         '''
+        print('test len',len(test_sets))
         x = np.vstack([tx[0] for tx in test_sets])
         y = np.vstack([tx[1] for tx in test_sets])
         x,y = shuffle_data(x,y)
         x,y = x[:min(len(x),100)],y[:min(len(y),100)]
+        '''
         m_vec,m_label = [],[]
         for j in range(2*t):
             ids = Model.y_core_sets[:,j]==1
@@ -540,15 +547,14 @@ for t in range(num_tasks):
             m_vec.append(x_train_task[ids].mean(axis=0))
             m_label.append(y_train_task[ids][0])
         m_y = np.vstack(m_label)
-
-
+        '''
         #g_vecs = Model.get_tasks_vec(sess,t,list(zip(Model.core_sets[0],Model.core_sets[1]))+[(x_train_task,y_train_task)])
-        #g_vecs = Model.get_tasks_vec(sess,t,zip(cx,cy),test_sample=True)
-        #print('g vecs len',len(g_vecs),g_vecs[0].shape)
+        g_vecs,_ = Model.get_tasks_vec(sess,t,zip(x,y),test_sample=True)
+        print('g vecs len',len(g_vecs),g_vecs[0].shape)
         #g_vecs = Model.get_tasks_vec(sess,t,test_sets[:-1]+[(x_train_task,y_train_task)])
         #dsts_t,dsts_v = [], []
-        #dsts_t = calc_similarity(np.vstack(g_vecs),sess=sess)
-        #dsts_v = calc_similarity(x,sess=sess) 
+        dsts_t = calc_similarity(np.array(g_vecs),sess=sess)
+        dsts_v = calc_similarity(x,sess=sess) 
         #print(dsts_t.shape,dsts_v.shape)
 
         #cmplx = (np.sum(dsts_t)-dsts_t.shape[0])/2.
@@ -576,43 +582,59 @@ for t in range(num_tasks):
         #plt.savefig(file_path+'grads_class_corr_t'+str(t)+'_i'+str(i)+'.pdf')
         plt.close()
         '''
-        g_vecs,nlls = Model.get_tasks_vec(sess,t,zip(x,y),test_sample=True)
-        m_g_vecs,m_nlls = Model.get_tasks_vec(sess,t,zip(m_vec,m_y),test_sample=True)
+        #g_vecs,nlls = Model.get_tasks_vec(sess,t,zip(x,y),test_sample=True)
+        #m_g_vecs,m_nlls = Model.get_tasks_vec(sess,t,zip(m_vec,m_y),test_sample=True)
         #print('m g vec',np.vstack(m_g_vecs).shape)
-        m_dsts_t = calc_similarity(np.vstack(g_vecs),np.vstack(m_g_vecs),sess=sess)
-        m_dsts_t = np.squeeze(m_dsts_t,axis=1)
+        #m_dsts_t = calc_similarity(np.vstack(g_vecs),np.vstack(m_g_vecs),sess=sess)
+        #m_dsts_t = np.squeeze(m_dsts_t,axis=1)
         
         #dsts_t = calc_similarity(np.vstack(g_vecs),sess=sess)
-        yids = 1.- np.matmul(y,m_y.transpose())
+        #yids = 1.- np.matmul(y,m_y.transpose())
         #print(m_dsts_t.shape,yids.shape)
         #rank_t = -(np.sum(dsts_t*yids,axis=0))*0.5/np.sum(yids,axis=0) \
         #            + ((np.sum(dsts_t*(1.-yids),axis=0)-1.)*0.5)/(np.sum(1.-yids,axis=0)-1.)
-        rank_t = -(np.sum(m_dsts_t*yids,axis=1)*0.5)/np.sum(yids,axis=1) \
-                    + (np.sum(m_dsts_t*(1.-yids),axis=1)*0.5)/np.sum(1.-yids,axis=1)
+        #rank_t = -(np.sum(m_dsts_t*yids,axis=1)*0.5)/np.sum(yids,axis=1) \
+        #            + (np.sum(m_dsts_t*(1.-yids),axis=1)*0.5)/np.sum(1.-yids,axis=1)
         
-        print('rank_t \n {}'.format(rank_t.shape))
+        #print('rank_t \n {}'.format(rank_t.shape))
         #rank_l = np.argsort(-nlls)
         #print('rank_l \n {}'.format((rank_l)))
-        sn.regplot(rank_t,nlls)
+        #sn.regplot(rank_t,nlls)
         #sn.scatterplot(rank_t[yids==1],nlls[yids==1])
-        plt.savefig(file_path+'rank_corr'+str(t)+'.pdf')
-        plt.close()
+        #plt.savefig(file_path+'rank_corr'+str(t)+'.pdf')
+        #plt.close()
         #np.savetxt(file_path+'dsts_tx_t'+str(t)+'.csv',dsts_t,delimiter=',')
         #print('h shape',Model.H[0].shape)
         
         hx = sess.run(Model.H,feed_dict={Model.x_ph:x,Model.y_ph:y})
         hx = np.hstack(hx)
-        yids = 1.- np.matmul(y,y.transpose())
+        yids = 1- np.matmul(y,y.transpose())
+        mask = np.eye(y.shape[0])
+        yids_s = mask - np.matmul(y,y.transpose())
+        yids = yids.reshape(-1).astype(bool)
+        yids_s = yids_s.reshape(-1).astype(bool)
         print('hx',hx.shape)
         
-        dsts_v = calc_similarity(hx,sess=sess)
-        np.savetxt(file_path+'dsts_hx_v'+str(t)+'.csv',dsts_v,delimiter=',')
-        rank_v = (np.sum(dsts_v*yids,axis=1)*0.5) \
-                    - (np.sum(dsts_v*(1.-yids),axis=1)*0.5)
-        sn.regplot(rank_v,nlls)
-        #sn.scatterplot(rank_t[yids==1],nlls[yids==1])
-        plt.savefig(file_path+'hx_rank_corr'+str(t)+'.pdf')
+        dsts_h = calc_similarity(hx,sess=sess)
+        sn.scatterplot(dsts_t.reshape(-1)[yids],dsts_h.reshape(-1)[yids])
+        sn.scatterplot(dsts_t.reshape(-1)[yids_s],dsts_h.reshape(-1)[yids_s])
+        #sn.scatterplot(dsts_t[1-yids].reshape(-1),dsts_v[1-yids].reshape(-1))
+        plt.legend(['diff class','same class'])
+        plt.savefig(file_path+'grads_class_euc_corr_hx_t'+str(t)+'.pdf')
         plt.close()
+        sn.scatterplot(dsts_t.reshape(-1)[yids],dsts_v.reshape(-1)[yids])
+        sn.scatterplot(dsts_t.reshape(-1)[yids_s],dsts_v.reshape(-1)[yids_s])
+        #sn.scatterplot(dsts_t[1-yids].reshape(-1),dsts_v[1-yids].reshape(-1))
+        plt.legend(['diff class','same class'])
+        plt.savefig(file_path+'grads_class_euc_corr_fx_t'+str(t)+'.pdf')
+        plt.close()
+        #np.savetxt(file_path+'dsts_hx_v'+str(t)+'.csv',dsts_v,delimiter=',')
+        #rank_v = (np.sum(dsts_v*yids,axis=1)*0.5) \
+        #            - (np.sum(dsts_v*(1.-yids),axis=1)*0.5)
+        #sn.regplot(rank_v,nlls)
+        #sn.scatterplot(rank_t[yids==1],nlls[yids==1])
+        #plt.savefig(file_path+'hx_rank_corr'+str(t)+'.pdf')
+        #plt.close()
 
         '''
         for i in range(2*(t+1)):
@@ -664,7 +686,6 @@ for t in range(num_tasks):
         #print(type(labels[0][0]))
         labels = np.concatenate(labels).astype(np.uint8)
         save_samples(file_path,[probs,labels],['test_resps_t'+str(t), 'test_labels_t'+str(t)])
-
     if t < num_tasks-1:
 
         '''
@@ -699,6 +720,11 @@ with open(file_path+'avg_accuracy.csv','w') as f:
     writer = csv.writer(f,delimiter=',')
     writer.writerow(avg_accs)
     writer.writerow(task_sims)
+
+with open(file_path+'eplapsed_time.csv','w') as f:
+    writer = csv.writer(f,delimiter=',')
+    writer.writerow([time_count])
+    
 
 
 with open(file_path+'task_distances.csv','w') as f:

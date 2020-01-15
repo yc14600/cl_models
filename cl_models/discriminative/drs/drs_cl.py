@@ -114,7 +114,12 @@ class DRS_CL(VCL):
         loss,ll,reg, dis = 0.,0.,0.,0.
         
         if likelihood:
-            ll = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=H[-1],labels=y))
+            #if not self.discriminant:
+            if self.task_type == 'split':
+                ll = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=H[-1],labels=y))
+            else:
+                ll = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=H[-1],labels=y))
+
             loss += ll
 
         if regularization:
@@ -127,10 +132,8 @@ class DRS_CL(VCL):
             yids = tf.matmul(y, tf.transpose(y))
             N = self.B
             mask = tf.eye(N) 
-            #print('y',y,'yids',yids)
-            h_list = H if self.task_type == 'split' else H[:-1]
-            for h in h_list:
-                #h = H[0]
+            
+            for h in H:
                 if len(h.shape) > 2:
                     h = tf.reshape(h,[N,-1])
                 
@@ -263,7 +266,7 @@ class DRS_CL(VCL):
         # training for current task
         num_iter = int(np.ceil(x_train_task.shape[0]/self.batch_size))
         #sess.run(self.task_optimizer[1].initializer)
-        print('training set',x_train_task.shape[0],'num iter',num_iter)
+        #print('training set',x_train_task.shape[0],'num iter',num_iter)
         
         for e in range(epoch):
             shuffle_inds = np.arange(x_train_task.shape[0])

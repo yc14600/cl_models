@@ -150,9 +150,9 @@ class DRS_CL(VCL):
 
         x_batch, y_batch = feed_dict[self.x_ph], feed_dict[self.y_ph]
         buffer_size = self.B 
-        
-        if self.coreset_mode == 'ring_buffer':  
-            self.update_ring_buffer(t,x_batch,y_batch)
+
+        if local_iter == 0 and self.coreset_mode == 'ring_buffer':  
+                self.update_ring_buffer(t,x_batch,y_batch,sess=sess)
             
         if t > 0:
 
@@ -234,7 +234,7 @@ class DRS_CL(VCL):
             
             feed_dict.update({self.x_ph:coreset_x,self.y_ph:coreset_y})
                 
-        ### empty memory ###              
+        ### first task ###              
         else:
             if self.task_type == 'split':
                 cx, cy = [], []
@@ -284,7 +284,7 @@ class DRS_CL(VCL):
                     if self.net_type == 'resnet18':
                         feed_dict.update({self.training:True})
 
-                    err = self.train_update_step(t,_,sess,feed_dict,err,x_train_task,y_train_task,local_iter=local_iter,*args,**kargs)
+                    err = self.train_update_step(t,_,sess,feed_dict,err,x_train_task,y_train_task,local_iter=__,*args,**kargs)
                 
                 if self.coreset_type == 'stein' and (_+1)%local_iter==0:
                     sess.run(self.stein_train)

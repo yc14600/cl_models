@@ -13,16 +13,12 @@ import os
 import sys
 
 import tensorflow as tf
-import edward as ed
 
-from edward.models import Normal
-from cl_models import BCL_BNN
-from cl_models import VCL
+
 from utils.model_util import *
 from utils.train_util import *
 from utils.coreset_util import *
 from utils.resnet_util import *
-from base_models.gans import GAN
 from functools import reduce
 
 from .drs_cl import DRS_CL,MLE_Inference
@@ -56,7 +52,7 @@ class AGEM(DRS_CL):
         
         x_batch, y_batch = feed_dict[self.x_ph], feed_dict[self.y_ph]
         
-        if self.coreset_mode == 'ring_buffer':  
+        if local_iter == 0 and self.coreset_mode == 'ring_buffer':  
             self.update_ring_buffer(t,x_batch,y_batch)
             #print('check core sets', self.core_sets.keys())
 
@@ -88,7 +84,7 @@ class AGEM(DRS_CL):
             mem_x,mem_y = shuffle_data(mem_x,mem_y)
             bids = np.random.choice(mem_x.shape[0],size=self.mem_batch_size)
             ref_feed_dict = {self.x_ph:mem_x[bids],self.y_ph:mem_y[bids]}
-            if self.training is not None:
+            if self.net_type == 'resnet18': 
                 ref_feed_dict.update({self.training:True})
             sess.run(self.inference.store_ref_grads,ref_feed_dict)
 

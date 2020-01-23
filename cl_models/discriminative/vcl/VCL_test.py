@@ -120,7 +120,7 @@ elif dataset == 'not-notmnist':
     args.task_type = 'cross_split'
     DATA_DIR = [os.path.join(args.data_path,d) for d in ['mnist','notmnist']]
 elif dataset == 'quickdraw':
-    DATA_DIR = os.path.join(args.data_path,'/quickdraw/full/numpy_bitmap/')
+    DATA_DIR = os.path.join(args.data_path,'quickdraw/full/numpy_bitmap/')
 print(dataset)
 
 
@@ -214,7 +214,7 @@ elif 'cross_split' in args.task_type:
         out_dim = len(X_TRAIN)
         cl_n = out_dim
         cl_cmb = None
-        x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = gen_next_task_data(args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,out_dim=out_dim) 
+        x_train_task,y_train_task,x_test_task,y_test_task,cl_k,clss = gen_next_task_data(args.task_type,X_TRAIN,Y_TRAIN,X_TEST,Y_TEST,train_size=args.train_size,test_size=args.test_size,out_dim=out_dim) 
 
 
 elif 'split' in args.task_type:
@@ -515,7 +515,7 @@ for t in range(args.num_tasks):
         Model.train_task(sess,t,x_train_task,y_train_task,args.epoch,args.print_epoch,args.local_iter)
     end = time.time()
     time_count += end-start
-    print('passed time',time_count)
+    print('training time',time_count)
     if args.save_parm:
         Model.save_parm(t,file_path,sess)
     
@@ -628,7 +628,10 @@ for t in range(args.num_tasks):
         plt.legend(['diff class','same class'])
         plt.savefig(file_path+'grads_class_euc_corr_fx_t'+str(t)+'.pdf')
         plt.close()
-        #np.savetxt(file_path+'dsts_hx_v'+str(t)+'.csv',dsts_v,delimiter=',')
+        np.savetxt(file_path+'dsts_hx_diff_'+str(t)+'.csv',dsts_h.reshape(-1)[yids],delimiter=',')
+        np.savetxt(file_path+'dsts_hx_same_'+str(t)+'.csv',dsts_h.reshape(-1)[yids_s],delimiter=',')
+        np.savetxt(file_path+'dsts_gx_diff_'+str(t)+'.csv',dsts_t.reshape(-1)[yids],delimiter=',')
+        np.savetxt(file_path+'dsts_gx_same_'+str(t)+'.csv',dsts_t.reshape(-1)[yids_s],delimiter=',')
         #rank_v = (np.sum(dsts_v*yids,axis=1)*0.5) \
         #            - (np.sum(dsts_v*(1.-yids),axis=1)*0.5)
         #sn.regplot(rank_v,nlls)

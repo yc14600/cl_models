@@ -13,6 +13,8 @@ path = os.getcwd()
 import sys
 sys.path.append(path+'/../')
 
+import scipy.stats as stats
+
 import tensorflow as tf
 # In[3]:
 from abc import ABC, abstractmethod
@@ -44,6 +46,7 @@ class BCL_BNN(BCL_BASE_MODEL):
         self.coreset_mode = coreset_mode
         self.task_type = task_type
         print('coreset mode',self.coreset_mode,'task type',task_type)
+        self.data_stats = {}
 
         return
 
@@ -187,7 +190,22 @@ class BCL_BNN(BCL_BASE_MODEL):
         return x_train_task,y_train_task
 
 
-    def update_ring_buffer(self,t,x_batch,y_batch):
+    def update_data_stats(self,x_batch,y_batch):
+        #print('update data stats')
+        y_mask = np.sum(y_batch,axis=0) > 0
+        nc_batch = np.sum(y_mask)                
+        cls_batch = np.argsort(y_mask)[-nc_batch:]
+        for c in cls_batch:
+            c_stats = self.data_stats.get(c,None)
+            cx = x_batch[y_batch[:,c]==1]
+            if c_stats is None:
+                c_stats = [np.sum(cx,axis=0), np.sum(np.square(cx),axis=0), len(cx)]
+            else:
+                c_stats = [np.sum(cx,axis=0)+c_stats[0], np.sum(np.square(cx),axis=1)+c_stats[1], len(cx)+c_stats[2]]
+            self.data_stats[c] = c_stats   
+
+
+    def update_ring_buffer(self,t,x_batch,y_batch,sess=None):
            
         if self.task_type == 'split':
             y_mask = np.sum(y_batch,axis=0) > 0
@@ -206,11 +224,11 @@ class BCL_BNN(BCL_BASE_MODEL):
             cy = y_batch if cxy is None else np.vstack([cxy[1],y_batch])
             self.core_sets[t] = (cx,cy)
             
-        self.online_update_coresets(self.coreset_size,self.fixed_budget,t)
+        self.online_update_coresets(self.coreset_size,self.fixed_budget,t,sess=sess)
 
         return
 
-    def online_update_coresets(self,coreset_size,fixed_budget,t):
+    def online_update_coresets(self,coreset_size,fixed_budget,t,sess=None):
     
         if self.coreset_mode == 'ring_buffer':
             if fixed_budget:
@@ -232,7 +250,7 @@ class BCL_BNN(BCL_BASE_MODEL):
                 if self.task_type == 'split':
                     for i in self.core_sets.keys():
                         cx = self.core_sets[i]  
-                        if coreset_size < len(cx):                                            
+                        if coreset_size < len(cx):                                                                     
                             cx = cx[-coreset_size:]
                             self.core_sets[i] = cx
                             #print('after online update',i,len(cx))
@@ -250,8 +268,7 @@ class BCL_BNN(BCL_BASE_MODEL):
                         clss = np.argsort(clss)[-tot:]
                         #print('num cls',num_cls,clss)
                         for c in clss:
-                            #print('check online update',c,num_cls[c],num_per_cls)
-                            cids = cy[:,c]==1
+                            cids = cy[:,c]==1                            
                             rids = np.argsort(cids)[-num_cls[c]:-num_per_cls]
                             cids = np.ones(len(cx))
                             cids[rids] = 0
@@ -259,12 +276,6 @@ class BCL_BNN(BCL_BASE_MODEL):
                             #print('after update',c,len(cx))
                             cy = cy[cids.astype(bool)]
                         self.core_sets[t] = (cx,cy)
-                
-
-
-
-
-
 
 
     def config_inference(self,TRAIN_SIZE,scale=1.,shrink=1.,*args,**kargs):

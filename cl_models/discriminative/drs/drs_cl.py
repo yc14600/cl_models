@@ -138,7 +138,7 @@ class DRS_CL(VCL):
                     h = tf.reshape(h,[N,-1])
                 
                 sim = tf.matmul(h,tf.transpose(h))
-                dis += 0.5*tf.reduce_mean(sim*(1.-yids)-0.5*sim*(mask-yids))
+                dis += 0.5*tf.reduce_mean(sim*(1.-yids)-sim*(mask-yids))
             loss += self.lambda_dis * dis
 
 

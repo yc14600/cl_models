@@ -290,7 +290,7 @@ elif 'split' in args.task_type:
         else:
             out_dim = 2 * num_tasks
 
-        cl_cmb = np.arange(10) #[7,9,4,6,3,7,1,0,2,9]#
+        cl_cmb = np.arange(10) #[7,9,4,6,3,7,1,0,2,5]#
         cl_k = 0
         cl_n = 2
         
@@ -617,15 +617,23 @@ for t in range(args.num_tasks):
         
         dsts_h = calc_similarity(hx,sess=sess)
         sn.scatterplot(dsts_t.reshape(-1)[yids],dsts_h.reshape(-1)[yids])
+        print('rep diff corrcoef',np.corrcoef(dsts_t.reshape(-1)[yids],dsts_h.reshape(-1)[yids]))
         sn.scatterplot(dsts_t.reshape(-1)[yids_s],dsts_h.reshape(-1)[yids_s])
+        print('rep same corrcoef',np.corrcoef(dsts_t.reshape(-1)[yids_s],dsts_h.reshape(-1)[yids_s]))
         #sn.scatterplot(dsts_t[1-yids].reshape(-1),dsts_v[1-yids].reshape(-1))
-        plt.legend(['diff class','same class'])
+        plt.legend(['diff class','same class'],fontsize=13)
+        plt.xlabel('Similarity of gradients',fontsize=13)
+        plt.ylabel('Similarity of representations',fontsize=13)
         plt.savefig(file_path+'grads_class_euc_corr_hx_t'+str(t)+'.pdf')
         plt.close()
         sn.scatterplot(dsts_t.reshape(-1)[yids],dsts_v.reshape(-1)[yids])
+        print('feature diff corrcoef',np.corrcoef(dsts_t.reshape(-1)[yids],dsts_v.reshape(-1)[yids]))
         sn.scatterplot(dsts_t.reshape(-1)[yids_s],dsts_v.reshape(-1)[yids_s])
+        print('feature same corrcoef',np.corrcoef(dsts_t.reshape(-1)[yids_s],dsts_v.reshape(-1)[yids_s]))
         #sn.scatterplot(dsts_t[1-yids].reshape(-1),dsts_v[1-yids].reshape(-1))
-        plt.legend(['diff class','same class'])
+        plt.legend(['diff class','same class'],fontsize=13)
+        plt.xlabel('Similarity of gradients',fontsize=13)
+        plt.ylabel('Similarity of features',fontsize=13)
         plt.savefig(file_path+'grads_class_euc_corr_fx_t'+str(t)+'.pdf')
         plt.close()
         np.savetxt(file_path+'dsts_hx_diff_'+str(t)+'.csv',dsts_h.reshape(-1)[yids],delimiter=',')

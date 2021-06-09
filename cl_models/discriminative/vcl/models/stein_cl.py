@@ -13,14 +13,14 @@ import os
 import sys
 
 import tensorflow as tf
-import edward as ed
 
-from edward.models import Normal
+
+from utils.distributions import Normal
 from .bcl_base_bnn import BCL_BNN
 from .vcl_model import VCL
+from .coreset import *
 from utils.model_util import *
 from utils.train_util import *
-from utils.coreset_util import *
 from base_models.gans import GAN
 from functools import reduce
 from scipy.special import softmax

@@ -9,9 +9,8 @@ import copy
 import six
 import importlib
 import os
-path = os.getcwd()
 import sys
-sys.path.append(path+'/../')
+
 
 import scipy.stats as stats
 
@@ -19,13 +18,15 @@ import tensorflow as tf
 # In[3]:
 from abc import ABC, abstractmethod
 from .bcl_base_model import BCL_BASE_MODEL
+from .coreset import *
 from utils.model_util import *
 from utils.train_util import *
-from utils.coreset_util import *
+from utils.distributions import RandomVariable
+
 
 from hsvi.hsvi import Hierarchy_SVI
 from hsvi.methods.svgd import SVGD
-from edward.models import RandomVariable
+
 
 class BCL_BNN(BCL_BASE_MODEL):
 
@@ -163,9 +164,10 @@ class BCL_BNN(BCL_BASE_MODEL):
             self.core_sets[0].append(core_x_set)
         
         else:  # define stein samples
+            print('config stein coresets')
             if isinstance(self.qW[0],RandomVariable):
-                qW = [w.loc for w in self.qW]
-                qB = [b.loc for b in self.qB]
+                qW = self.qW#[w.loc for w in self.qW]
+                qB = self.qB#[b.loc for b in self.qB]
                 if self.conv:
                     cW = [w.loc for w in self.conv_W]
             else:
@@ -182,7 +184,7 @@ class BCL_BNN(BCL_BASE_MODEL):
 
             self.core_sets[0].append(self.stein_core_x)
             self.stein_train = self.stein_optimizer[0].apply_gradients([(core_sgrad,self.stein_core_x)],global_step=self.stein_optimizer[1])
-            tf.variables_initializer(tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="stein_task"+str(t))).run()
+            tf.variables_initializer(tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="stein_task"+str(t))).run(session=sess)
             sess.run(tf.variables_initializer(self.stein_optimizer[0].variables()))
 
         self.curnt_core_y_data = curnt_core_y_data
@@ -279,9 +281,9 @@ class BCL_BNN(BCL_BASE_MODEL):
 
 
     def config_inference(self,TRAIN_SIZE,scale=1.,shrink=1.,*args,**kargs):
-        
+        print('config VI')
         inference = Hierarchy_SVI(latent_vars={'task':self.task_var_cfg},data={'task':{self.H[-1]:self.y_ph}})
-
+        print('after init VI')
         if 'KLqp' in self.vi_type or 'MLE' in self.vi_type:
             if 'NG' in self.vi_type:
                 inference.initialize(vi_types={'task':self.vi_type},scale={self.H[-1]:scale},optimizer={'task':self.task_optimizer},train_size=TRAIN_SIZE*shrink,trans_parm={'task':self.parm_var})

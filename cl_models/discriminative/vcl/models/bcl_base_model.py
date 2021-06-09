@@ -9,16 +9,15 @@ import copy
 import six
 import importlib
 import os
-path = os.getcwd()
 import sys
-sys.path.append(path+'/../')
+
 
 import tensorflow as tf
 # In[3]:
 from abc import ABC, abstractmethod
 from utils.model_util import *
 from utils.train_util import *
-from utils.coreset_util import *
+from .coreset import *
 
 class BCL_BASE_MODEL(ABC):
     

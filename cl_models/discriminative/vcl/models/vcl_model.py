@@ -13,13 +13,13 @@ import os
 import sys
 
 import tensorflow as tf
-import edward as ed
-from edward.models import RandomVariable
 
 from .bcl_base_bnn import BCL_BNN
+from .coreset import *
 from utils.model_util import *
 from utils.train_util import *
-from utils.coreset_util import *
+from utils.distributions import RandomVariable
+
 
 
 
@@ -65,6 +65,7 @@ class VCL(BCL_BNN):
                 if t > 0 and self.coreset_usage != 'final':
                     if self.num_heads > 1:
                         for k in range(t):
+                            #print('coreset {} shape {}'.format(k,self.x_core_sets[k].shape))
                             feed_dict.update({self.core_x_ph[k]:self.x_core_sets[k]})
                     else:    
                         feed_dict.update({self.core_x_ph:self.x_core_sets})
@@ -80,7 +81,7 @@ class VCL(BCL_BNN):
 
                 cids = np.random.choice(self.batch_size,size=self.batch_size*n)
                 coreset_x = np.vstack([self.x_core_sets[bids],feed_dict[self.x_ph][cids]])
-                #print('check shape',self.y_core_sets.shape,self.y_ph.shape)
+                #print('coreset_x shape',coreset_x.shape)
                 coreset_y = np.vstack([self.y_core_sets[bids],np.squeeze(feed_dict[self.y_ph][cids])])
                 feed_dict[self.x_ph] = coreset_x
                 feed_dict[self.y_ph] = np.expand_dims(coreset_y,axis=0)

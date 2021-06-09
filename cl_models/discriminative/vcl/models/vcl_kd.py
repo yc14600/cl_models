@@ -14,9 +14,11 @@ import sys
 
 import tensorflow as tf
 from .vcl_model import VCL
+from .coreset import gen_random_coreset
+
 from utils.model_util import *
 from utils.train_util import *
-from utils.coreset_util import gen_random_coreset
+
 from tensorflow.contrib.distributions import Normal
 
 

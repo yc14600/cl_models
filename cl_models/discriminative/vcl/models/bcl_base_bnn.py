@@ -15,7 +15,7 @@ import sys
 import scipy.stats as stats
 
 import tensorflow as tf
-# In[3]:
+
 from abc import ABC, abstractmethod
 from .bcl_base_model import BCL_BASE_MODEL
 from .coreset import *

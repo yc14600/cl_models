@@ -395,7 +395,6 @@ else:
 
 Model.init_inference(learning_rate=args.learning_rate,decay=decay,train_size=TRAIN_SIZE,grad_type=args.grad_type,scale=scale)
 
-#sess = ed.get_session() 
 
 sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) 
 

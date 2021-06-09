@@ -6,8 +6,7 @@ from __future__ import print_function
 import numpy as np
 import tensorflow as tf
 
-from edward.models import Normal
-
+from utils.distributions import Normal
 from utils.train_util import *
 from utils.model_util import *
 from base_models.vae import VAE,Discriminant_VAE

@@ -1,28 +1,14 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[1]:
-
 
 import numpy as np
 import tensorflow as tf
-import edward as ed
 import matplotlib.pyplot as plt
 import seaborn as sns
 import matplotlib.gridspec as gridspec
 import argparse
 
-
-# In[2]:
-
-
 import os
-path = os.getcwd()
 import sys
-sys.path.append(path+'/../')
 
-
-# In[3]:
 
 
 from base_models.gans import fGAN,GAN,CGAN,CWGAN,CfGAN
@@ -34,14 +20,8 @@ from utils.train_util import *
 from utils.data_util import extract_data,extract_labels
 from utils.test_util import *
 
-
-# In[4]:
-
-
 from tensorflow.examples.tutorials.mnist import input_data
 
-
-# In[ ]:
 def set_tblog(ccgan):
     g_grads = tf.gradients(ccgan.model.g_loss, ccgan.model.g_var_list)
     for g in g_grads:
@@ -128,11 +108,6 @@ class CDRE_CFG:
         self.filter = args.cdre_filter_range
 
 
-
-# In[ ]:
-
-
-# In[ ]:
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_dir', default='../../data/mnist/', type=str, help='specify data directory')
 parser.add_argument('--T', default=10, type=int, help='number of tasks')
@@ -198,8 +173,6 @@ result_path = args.result_path + file_name + '/'
 
 c_dim = args.T
 
-# In[ ]:
-
 
 data = input_data.read_data_sets(args.data_dir,one_hot=False) 
 
@@ -212,8 +185,6 @@ if args.cdre:
     Y_TEST = data.test.labels
 
 
-
-# In[ ]:
 
 x_dim = X_TRAIN.shape[-1]
 if args.multihead:

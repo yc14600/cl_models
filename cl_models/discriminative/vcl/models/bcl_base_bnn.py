@@ -213,7 +213,6 @@ class BCL_BNN(BCL_BASE_MODEL):
             y_mask = np.sum(y_batch,axis=0) > 0
             nc_batch = np.sum(y_mask)                
             cls_batch = np.argsort(y_mask)[-nc_batch:]
-            #print('cls batch',cls_batch,'nc mem',nc_mem)
 
             for c in cls_batch:
                 cx = self.core_sets.get(c,None)
@@ -246,7 +245,6 @@ class BCL_BNN(BCL_BASE_MODEL):
                     R -= 1
                     clen = [(c,len(cx)) for c,cx in self.core_sets.items()] if self.task_type=='split' else [(c,len(cx[0])) for c,cx in self.core_sets.items()]
                     lens = [it[1] for it in clen]
-                #print('{} samples in mem'.format(lens))
                 
             else:
                 if self.task_type == 'split':
@@ -255,7 +253,6 @@ class BCL_BNN(BCL_BASE_MODEL):
                         if coreset_size < len(cx):                                                                     
                             cx = cx[-coreset_size:]
                             self.core_sets[i] = cx
-                            #print('after online update',i,len(cx))
                 else:
                     ## permuted task ##
                     cx = self.core_sets[t][0]
@@ -280,15 +277,15 @@ class BCL_BNN(BCL_BASE_MODEL):
                         self.core_sets[t] = (cx,cy)
 
 
-    def config_inference(self,TRAIN_SIZE,scale=1.,shrink=1.,*args,**kargs):
+    def config_inference(self,TRAIN_SIZE,scale=1.,shrink=1.,n_iter=1000,*args,**kargs):
         print('config VI')
         inference = Hierarchy_SVI(latent_vars={'task':self.task_var_cfg},data={'task':{self.H[-1]:self.y_ph}})
-        print('after init VI')
+       
         if 'KLqp' in self.vi_type or 'MLE' in self.vi_type:
             if 'NG' in self.vi_type:
-                inference.initialize(vi_types={'task':self.vi_type},scale={self.H[-1]:scale},optimizer={'task':self.task_optimizer},train_size=TRAIN_SIZE*shrink,trans_parm={'task':self.parm_var})
+                inference.initialize(vi_types={'task':self.vi_type},scale={self.H[-1]:scale},optimizer={'task':self.task_optimizer},train_size=TRAIN_SIZE*shrink,trans_parm={'task':self.parm_var},n_iter=n_iter)
             else:
-                inference.initialize(vi_types={'task':self.vi_type},scale={self.H[-1]:scale},optimizer={'task':self.task_optimizer},train_size=TRAIN_SIZE*shrink)
+                inference.initialize(vi_types={'task':self.vi_type},scale={self.H[-1]:scale},optimizer={'task':self.task_optimizer},train_size=TRAIN_SIZE*shrink,n_iter=n_iter)
         else:
             raise TypeError('NOT supported VI type!')
 
@@ -299,10 +296,9 @@ class BCL_BNN(BCL_BASE_MODEL):
 
     def train_task(self,sess,t,x_train_task,y_train_task,epoch,print_iter=5,local_iter=10,\
                     tfb_merged=None,tfb_writer=None,tfb_avg_losses=None,*args,**kargs):
-        #print('args',args,'kargs',kargs)
+
         # training for current task
         num_iter = int(np.ceil(x_train_task.shape[0]/self.batch_size))
-        #sess.run(self.task_optimizer[1].initializer)
         print('num iter',num_iter)
         for e in range(epoch):
             shuffle_inds = np.arange(x_train_task.shape[0])
@@ -311,6 +307,7 @@ class BCL_BNN(BCL_BASE_MODEL):
             y_train_task = y_train_task[shuffle_inds]
             err,kl,ll = 0.,0.,0.
             ii = 0
+            
             for _ in range(num_iter):
                 x_batch,y_batch,ii = get_next_batch(x_train_task,self.batch_size,ii,labels=y_train_task)
                 y_batch = np.expand_dims(y_batch,axis=0)

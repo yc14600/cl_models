@@ -24,7 +24,7 @@ from utils.train_util import *
 from utils.distributions import RandomVariable
 
 
-from hsvi.hsvi import Hierarchy_SVI
+from hsvi import Hierarchy_SVI
 from hsvi.methods.svgd import SVGD
 
 
